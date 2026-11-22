@@ -24,19 +24,35 @@ import jlimage as J                                  # noqa: E402
 
 INSTALL_DIR = 0x41000           # fw/boot/boot.h
 STAGE = 0x43000
-STAGE_END = 0x4D000
 STAGE_MAGIC = 0x49434D53        # "SMCI"
 PAYLOAD_OFF = 0x1000            # from STAGE
 DEST = 0x1000
-ERASE_STOCK = 0x26000
 ERASE_UPDATE = 0x9000           # APP_DIR
 VM = (0x71000, 0x4000)          # as in host/package_fw.sh
+
+# What differs per board (fw/boot/boot.h, BOARD_SMC_MIXER; fw/boot/build.sh BOARD=...).
+BOARDS = {
+    # name: stock firmware name prefix (SINCO 0x11), STAGE_END, ERASE_STOCK (= stock VM start),
+    #       fw/boot build output directory
+    "pad":   dict(prefix="SMC-PAD",   stage_end=0x4D000, erase_stock=0x26000, out="fw/boot/out"),
+    "mixer": dict(prefix="SMC-Mixer", stage_end=0x68000, erase_stock=0x24000, out="fw/boot/out-mixer"),
+}
+BOARD = "pad"
+STAGE_END = BOARDS[BOARD]["stage_end"]
+ERASE_STOCK = BOARDS[BOARD]["erase_stock"]
+
+
+def select_board(name):
+    global BOARD, STAGE_END, ERASE_STOCK
+    if name not in BOARDS:
+        raise SystemExit(f"unknown board {name!r} ({', '.join(BOARDS)})")
+    BOARD, STAGE_END, ERASE_STOCK = name, BOARDS[name]["stage_end"], BOARDS[name]["erase_stock"]
 
 
 def installer_area(template, cfg):
     """The installer as an app area for INSTALL_DIR. The uboot maps the directory sector 0
     points at to CPU (entry & ~0xFFFF), so the code runs at 0x1E00120 like the stock firmware."""
-    code = (ROOT / "fw/boot/out/install.bin").read_bytes()
+    code = (ROOT / BOARDS[BOARD]["out"] / "install.bin").read_bytes()
     area = J.build_app_area(code, cfg, template, entry_vma=J.AREA_VMA + 0x120, vm=VM, prct_size=VM[0])
     if INSTALL_DIR + len(area) > STAGE:
         raise SystemExit(f"installer area too big ({len(area):#x})")
@@ -44,11 +60,14 @@ def installer_area(template, cfg):
 
 
 def stage(erase_end, payload=None):
-    """Staging header + the bootloader's app area (plaintext; the installer encrypts it)."""
+    """Staging header + the payload app area for 0x1000 (plaintext; the installer encrypts it):
+    the bootloader's, or any area linked for 0x1000 such as a stock firmware's."""
     payload = payload or (ROOT / "work/flash/boot_area.bin").read_bytes()
     head = J.read_dir(payload)[0]
     if head.offset != J.AREA_VMA + 0x120 or J.crc16(payload[0x20:head.size]) != head.data_crc:
-        raise SystemExit("not a bootloader area for 0x1000 (host/package_fw.sh boot)")
+        raise SystemExit("not an app area for 0x1000 (host/package_fw.sh boot)")
+    if len(payload) > erase_end - DEST:             # fw/boot/boot.h DEST_MAX(erase_end)
+        raise SystemExit(f"payload {len(payload):#x} bytes does not fit 0x1000..{erase_end:#x}")
     hdr = struct.pack("<7I", STAGE_MAGIC, 1, PAYLOAD_OFF, len(payload),
                       zlib.crc32(payload), DEST, erase_end)
     hdr += struct.pack("<I", zlib.crc32(hdr))

@@ -87,12 +87,23 @@ struct boot_diag {
  * CPU- vs flash-address keying. */
 #define INSTALL_DIR         0x41000u
 #define STAGE               0x43000u            /* staging header; the payload follows */
-#define STAGE_END           0x4D000u
 #define STAGE_MAGIC         0x49434D53u         /* "SMCI" */
-#define DEST                0x1000u             /* where the payload (a bootloader area) goes */
-#define DEST_ERASE_STOCK    0x26000u            /* from the stock firmware: all of it goes */
+#define DEST                0x1000u             /* where the payload (an app area for 0x1000) goes */
 #define DEST_ERASE_UPDATE   APP_DIR             /* bootloader update: the application stays */
-#define DEST_MAX            (APP_DIR - DEST)
+#ifdef BOARD_SMC_MIXER
+/* SMC-Mixer (fw/boot/build.sh BOARD=mixer): the stock firmware's directory puts the VM at
+ * 0x24000 (it is in use there) and the stock app area fills 0x1000..0x24000. The staging area
+ * is big enough for a whole stock app area too (0x1000 header + 0x23000), so the same
+ * installer can put a vendor firmware back. All of 0x41000..0x68000 is blank stock VM space. */
+#define STAGE_END           0x68000u
+#define DEST_ERASE_STOCK    0x24000u            /* from the stock firmware: all of it goes */
+#else
+#define STAGE_END           0x4D000u
+#define DEST_ERASE_STOCK    0x26000u            /* from the stock firmware: all of it goes */
+#endif
+/* The payload must fit in what gets erased for it: the stock area or, for a bootloader
+ * update, 0x1000..APP_DIR (the old DEST_MAX). */
+#define DEST_MAX(erase_end) ((erase_end) - DEST)
 
 struct stage_header {
     u32 magic;

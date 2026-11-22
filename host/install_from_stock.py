@@ -37,7 +37,7 @@ import bootpkg                                       # noqa: E402
 import jlimage as J                                  # noqa: E402
 from sinco_flash import FlashLink                    # noqa: E402
 
-INSTALL_DIR, STAGE, STAGE_END, DEST = bootpkg.INSTALL_DIR, bootpkg.STAGE, bootpkg.STAGE_END, bootpkg.DEST
+INSTALL_DIR, STAGE, DEST = bootpkg.INSTALL_DIR, bootpkg.STAGE, bootpkg.DEST   # STAGE_END: per board
 SECTOR = 0x1000
 CHUNK = 1024                    # the stock firmware's write limit
 DFU_ID = "1209:0002"
@@ -101,7 +101,7 @@ class Pad:
         self.link.send(0x11)
         r = self.link.recv(1.0)
         if not r or r[0] != 0x11:
-            die("the stock firmware does not answer on SINCO SMC-PAD-Private")
+            die("the stock firmware does not answer on the SINCO *-Private port")
         self.name = r[1].rstrip(b"\0").decode(errors="replace")
 
     def read(self, addr, n):
@@ -133,8 +133,35 @@ def build_installer_area(pad):
     return bootpkg.installer_area(template, pad.read(DEST + cfg_e.offset, cfg_e.size))
 
 
-def build_stage():
-    return bootpkg.stage(bootpkg.ERASE_STOCK)
+def build_stage(payload=None):
+    return bootpkg.stage(bootpkg.ERASE_STOCK, payload)
+
+
+def sinco_name():
+    """The name a SINCO device answers 0x11 with right now, or None (not there / no answer)."""
+    try:
+        link = FlashLink()
+        link.drain()
+        link.send(0x11)
+        r = link.recv(1.0)
+        return r[1].rstrip(b"\0").decode(errors="replace") if r and r[0] == 0x11 else None
+    except (SystemExit, Exception):
+        return None                                 # not enumerated
+
+
+def wait_for_stock(timeout_s=300):
+    """After the power cycle, with a stock payload: first the old firmware has to go away (it
+    keeps answering until the power cycle), then the new one has to answer SINCO 0x11."""
+    end = time.time() + timeout_s
+    while time.time() < end and sinco_name() is not None:
+        time.sleep(0.5)
+    say("   device gone, waiting for it to come back")
+    while time.time() < end:
+        name = sinco_name()
+        if name:
+            return name
+        time.sleep(1.0)
+    return None
 
 
 def in_dfu():
@@ -147,12 +174,22 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="read and check everything, write nothing")
     ap.add_argument("--app", default=str(ROOT / "work/flash/fw_area.bin"),
                     help="application area to write over DFU at the end")
+    ap.add_argument("--board", default="pad", choices=sorted(bootpkg.BOARDS),
+                    help="flash layout and installer build (fw/boot/build.sh BOARD=...)")
+    ap.add_argument("--payload", help="plaintext app area for 0x1000 to install instead of our "
+                                      "bootloader (work/flash/boot_area.bin)")
+    ap.add_argument("--payload-is-stock", action="store_true",
+                    help="the payload is a stock firmware: after the power cycle wait for it to "
+                         "answer on USB-MIDI instead of handing over to DFU")
     a = ap.parse_args()
+    bootpkg.select_board(a.board)
+    prefix = bootpkg.BOARDS[a.board]["prefix"]
+    payload = Path(a.payload).read_bytes() if a.payload else None
 
     pad = Pad(a.dry_run)
-    say(f"== stock firmware {pad.name} on USB-MIDI")
-    if not pad.name.startswith("SMC-PAD"):
-        die("not an SMC-PAD")
+    say(f"== stock firmware {pad.name} on USB-MIDI (board {a.board})")
+    if not pad.name.startswith(prefix):
+        die(f"not an {prefix}")
 
     K = sector0_keystream()
     phys = bytes(x ^ y for x, y in zip(pad.read(0, SECTOR), K))
@@ -162,11 +199,12 @@ def main():
         die(f"sector 0 boots {boot_dir:#x}, expected {DEST:#x}")
 
     installer = build_installer_area(pad)
-    stage = build_stage()
+    stage = build_stage(payload)
     say(f"   installer {len(installer):#x} bytes at {INSTALL_DIR:#x}, "
-        f"staging {len(stage):#x} bytes at {STAGE:#x}")
+        f"staging {len(stage):#x} bytes at {STAGE:#x}; the installer will erase "
+        f"{DEST:#x}..{bootpkg.ERASE_STOCK:#x} and write {len(stage) - bootpkg.PAYLOAD_OFF:#x} bytes there")
 
-    used = pad.read(INSTALL_DIR, STAGE_END - INSTALL_DIR)
+    used = pad.read(INSTALL_DIR, bootpkg.STAGE_END - INSTALL_DIR)
     if used.count(0xFF) != len(used):
         say("   note: the target area was not blank (an earlier attempt?): it gets erased")
 
@@ -196,6 +234,15 @@ def main():
             die("restored" if back == phys else
                 "COULD NOT RESTORE SECTOR 0 -- do not power off; keep this output and ask")
     say("   sector 0 OK")
+
+    if a.payload_is_stock:
+        say("\n>> now switch the device OFF and ON again: the installer replaces the firmware\n"
+            "   (a few seconds, then it resets into the new one); waiting for it on USB-MIDI")
+        name = wait_for_stock()
+        if name is None:
+            die("no SINCO answer within 5 minutes (keep the device powered; nothing else to do here)")
+        say(f"== the device answers again: {name}")
+        return
 
     say("\n>> now switch the pad OFF and ON again: the installer replaces the stock firmware\n"
         "   (a few seconds), then the bootloader comes up as DFU " + DFU_ID)

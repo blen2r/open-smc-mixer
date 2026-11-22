@@ -39,7 +39,28 @@ def parse(raw: bytes, nblocks: int):
 
 
 def parse_any(raw: bytes):
-    return parse(raw, 36) or parse(raw, 20)
+    return parse(raw, 36) or parse(raw, 20) or parse_filled(raw)
+
+
+def parse_filled(raw: bytes, nblocks: int = 20):
+    """Files whose metadata is padded with something other than 0x7D after NAME_VER.
+
+    SMC-Mixer_013.fwsc pads blocks 14..20 with 0x40, which decodes as more "digits"
+    ("SMC-Mixer_013210/.-,") and fails the strict parse. Take NAME, then exactly three
+    version digits, and strip the metadata byte of the first `nblocks` blocks as usual.
+    The UFW header CRCs (host/stock_area.py) are what tells whether the guess was right.
+    """
+    if len(raw) < nblocks * BLK:
+        return None
+    meta = "".join(chr((raw[(i - 1) * BLK + DATA] - i) & 0xFF) for i in range(1, nblocks + 1))
+    name, sep, rest = meta.partition("_")
+    if not sep or not name.isprintable() or len(rest) < 3 or not rest[:3].isdigit():
+        return None
+    ufw = bytearray()
+    for i in range(nblocks):
+        ufw += raw[i * BLK:i * BLK + DATA]
+    ufw += raw[nblocks * BLK:]
+    return name, int(rest[:3]), bytes(ufw)
 
 
 def pack(ufw: bytes, name: str, version: int, nblocks: int = 20) -> bytes:

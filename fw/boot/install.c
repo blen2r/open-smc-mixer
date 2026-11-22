@@ -82,7 +82,7 @@ static u8 sector[SECTOR_SIZE] __attribute__((aligned(4)));
 
 /* What happened, also in flash (DIAG_PAGE, inside the area the installer erases when it is
  * done), since a failed install has nothing to show it with: read it in download mode. */
-#define DIAG_PAGE           0x4C000u
+#define DIAG_PAGE           (STAGE_END - SECTOR_SIZE)   /* 0x4C000 on the pad */
 #define DIAG_PAGE_MAGIC     0x31474449u         /* "IDG1" */
 static u32 diag_words[8];
 

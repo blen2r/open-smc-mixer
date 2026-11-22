@@ -147,7 +147,7 @@ int stage_check(struct stage_header *h)
     if (flash_read(STAGE, (u8 *)h, sizeof(*h)) || h->magic != STAGE_MAGIC || h->version != 1 ||
         crc32_update(0, (const u8 *)h, 28) != h->hdr_crc32 || h->dest != DEST ||
         (h->erase_end != DEST_ERASE_STOCK && h->erase_end != DEST_ERASE_UPDATE) ||
-        h->payload_len == 0 || h->payload_len > DEST_MAX ||
+        h->payload_len == 0 || h->payload_len > DEST_MAX(h->erase_end) ||
         STAGE + h->payload_off + h->payload_len > STAGE_END) {
         return -1;
     }

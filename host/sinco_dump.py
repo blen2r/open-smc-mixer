@@ -4,6 +4,7 @@
 Read-only. Usage:  python sinco_dump.py OUT.bin [--type 0] [--start 0] [--size 0x80000] [--chunk 256]
 """
 import argparse
+import os
 import struct
 import sys
 import time
@@ -12,13 +13,23 @@ import mido
 
 from sinco_proto import make_packet, pack7, unpack7, parse_packet
 
-PORT = "SINCO SMC-PAD-Private"
+PORT = os.environ.get("SINCO_PORT")      # exact port name; default: found by find_port()
+
+
+def find_port(names):
+    """The SINCO service port: "SINCO SMC-PAD-Private", "SINCO SMC-Mixer-Private", ... (on Linux
+    the ALSA names carry a client prefix and a ":24:0"-style suffix, so match on the substring)."""
+    hits = [n for n in names if "SINCO" in n and "-Private" in n]
+    if len(hits) != 1:
+        sys.exit(f"need exactly one SINCO *-Private MIDI port, found {hits or 'none'} "
+                 "(set SINCO_PORT to choose)")
+    return hits[0]
 
 
 class Link:
     def __init__(self, name=PORT):
-        self.inp = mido.open_input(name)
-        self.out = mido.open_output(name)
+        self.inp = mido.open_input(name or find_port(mido.get_input_names()))
+        self.out = mido.open_output(name or find_port(mido.get_output_names()))
 
     def send(self, cmd, payload=b""):
         msg = pack7(make_packet(cmd, payload))
