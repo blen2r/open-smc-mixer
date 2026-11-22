@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOOLCHAIN="$(ls -d "$ROOT"/tools/jl-toolchain/jieli-linux-toolchains-*/ | head -1)"
 mkdir -p "$ROOT/fw/boot/out"
 
-docker run --rm --platform linux/amd64 \
+docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" \
     -v "$TOOLCHAIN:/opt/jieli:ro" -v "$ROOT/fw:/fw" -v "$ROOT/third_party/tinyusb:/tinyusb:ro" \
     jl-build bash -c '
         set -e
