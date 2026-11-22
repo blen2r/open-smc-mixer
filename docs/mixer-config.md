@@ -40,13 +40,28 @@ layer that defines the control**:
 
 A mapping can also be **"disabled"** (send nothing), which is different from "not defined" (inherit).
 
-Reserved, not remappable: **Shift** itself and **Shift + Left / Shift + Right** (page down / up).
-Plain Left / Right keep their DAW meaning (bank) unless overridden.
+Reserved, not remappable: **Shift** itself, **Shift + Left / Shift + Right** (page down / up) and
+**Shift + Up / Shift + Down** (mode switch, see below). Plain arrows keep their DAW meaning
+(bank / channel) unless overridden.
+
+Note: in the **stock** firmware, Shift + Left / Right switches between DAW and CC mode. Ours moves
+mode switching to Shift + Up / Down so Left / Right can page.
+
+### Modes
+
+Shift + Up / Down cycles the mode. Proposed set (TBD):
+
+- **custom**: DAW base + overrides, pages, Shift layer (the normal mode).
+- **plain DAW**: overrides ignored, exactly the stock DAW behaviour (useful to check whether an
+  issue comes from the config).
+
+Mode kept across power cycles; the change is shown with an LED pattern (TBD).
 
 ## Pages
 
 - 8 pages, current page kept across power cycles.
 - Shift + Right: page + 1, Shift + Left: page - 1 (no wrap-around -- TBD).
+  (Stock firmware uses this combination for DAW/CC mode; ours uses Shift + Up / Down for that.)
 - On a page change the LED above fader `p` blinks for ~1 s (TBD: which LED, rate), then the LEDs go
   back to what they showed (DAW feedback or the button LEDs of the new page).
 - The firmware remembers, per page, the last value it sent for each absolute control, so coming back
@@ -125,5 +140,7 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 ## Open questions
 
 - DAW-mode defaults per control (capture of fw 013 DAW mode).
-- Button names, which buttons are Shift / Left / Right; which LEDs sit above the faders.
+- Button names, which buttons are Shift / Left / Right / Up / Down; which LEDs sit above the faders.
+- What the stock Shift + Left / Right mode switch sends over MIDI, if anything (capture it).
+- Which modes Shift + Up / Down should cycle through.
 - DAW banking with plain arrows in our firmware: reproduce the stock messages exactly (TBD).
