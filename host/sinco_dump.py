@@ -18,8 +18,9 @@ PORT = os.environ.get("SINCO_PORT")      # exact port name; default: found by fi
 
 def find_port(names):
     """The SINCO service port: "SINCO SMC-PAD-Private", "SINCO SMC-Mixer-Private", ... (on Linux
-    the ALSA names carry a client prefix and a ":24:0"-style suffix, so match on the substring)."""
-    hits = [n for n in names if "SINCO" in n and "-Private" in n]
+    the ALSA names carry a client prefix and a ":24:0"-style suffix, so match on the substring).
+    SMC-Mixer_013 calls its USB device "SMC-Mixer" instead of "SINCO": "SMC-Mixer:SMC-Mixer-Private"."""
+    hits = [n for n in names if "-Private" in n and ("SINCO" in n or "SMC-" in n)]
     if len(hits) != 1:
         sys.exit(f"need exactly one SINCO *-Private MIDI port, found {hits or 'none'} "
                  "(set SINCO_PORT to choose)")
