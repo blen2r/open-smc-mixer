@@ -52,10 +52,14 @@ class Mixer:
             sys.exit("SMC-Mixer (our firmware) not found on USB-MIDI")
         self.i = mido.open_input(name)
         self.o = mido.open_output(next(n for n in mido.get_output_names() if "SMC-Mixer open fw" in n))
-        self.seq = 0
+        self.seq = 0x40                     # away from the editor's, which starts at 1
 
     def cmd(self, c, data=b"", timeout=2.0):
         self.seq = (self.seq + 1) & 0x7F
+        # Replies go to every client of the port: drop what arrived while we were not listening
+        # (the web editor's replies, whose sequence numbers can match ours).
+        for _ in self.i.iter_pending():
+            pass
         self.o.send(mido.Message("sysex", data=[0x7D, 0x4D, c, self.seq] + pack7(bytes(data))))
         end = time.time() + timeout
         while time.time() < end:
