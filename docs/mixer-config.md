@@ -85,9 +85,9 @@ Mode kept across power cycles; the change is shown with an LED pattern (TBD).
 - 8 pages, current page kept across power cycles.
 - Shift + Right: page + 1, Shift + Left: page - 1 (no wrap-around -- TBD).
   (Stock firmware uses this combination for DAW/CC mode; ours uses Shift + Up / Down for that.)
-- On a page change the fader LED `Lp` lights **steadily** for ~1 s with the other fader LEDs off,
-  then the LEDs go back to what they showed (mismatch blinking, button LEDs of the new page).
-  Steady rather than blinking, because blinking already means "fader mismatch".
+- On a page change the fader LED `Lp` **blinks fast** for ~1 s with the other fader LEDs off,
+  then the LEDs go back to what they showed (mismatch lights, button LEDs of the new page).
+  Blinking is free for this because our mismatch light is solid.
 - The firmware remembers, per page, the last value it sent for each absolute control, so coming back
   to a page continues from there.
 
@@ -104,9 +104,9 @@ Knobs are endless encoders and do not need it.
 
 ### Fader mismatch LED
 
-Each fader has an LED above it (the lights under the knobs). Like the stock DAW mode, it blinks while
-the fader's physical position differs from the value it should have, so you know which faders need to
-be moved before they take effect:
+Each fader has an LED above it (the lights under the knobs). Unlike the stock DAW mode (which blinks), it is **solid** while
+the fader's physical position differs from the value it should have, and turns off the moment the fader reaches
+the value, so you can see exactly when you've hit it (a blinking LED makes that ambiguous):
 
 - **DAW default mapping:** the target is the value the host sends back (MCU pitch bend on the
   fader's channel), as in stock.
