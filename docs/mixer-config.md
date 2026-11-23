@@ -19,13 +19,37 @@ the base and anything can be overridden**, per page and per Shift layer:
 
 | group | count | id range | notes |
 |---|---|---|---|
-| knob | 8 | `K1..K8` | endless encoders (Midi Suite has a "Speed" setting) -- TBD: push switch? |
-| fader | 9 | `F1..F9` | not motorized; F1 is the leftmost (TBD: master?) |
+| knob | 8 | `K1..K8` | endless encoders, no push switch; LED ring/indicator driven by the host |
+| fader | 9 | `F1..F9` | not motorized; F1 is the leftmost, F9 = master (TBD: sent nothing in capture) |
 | track button | 8 x 4 | `T1.1..T8.4` | column x row, top row = 1; have LEDs |
-| global button | 11 + 2 | `G1..G13` | bottom row left to right, then the two ovals top right -- TBD names |
+| global button | 11 | `G1..G11` | bottom row, left to right: Play, Pause, Record, Rewind, Fast-forward, `<<`, `>>`, Up, Down, Left, Right |
+| oval button | 2 | `O1`, `O2` | top right: O1 = Bluetooth, O2 = **Shift** (neither sends MIDI) |
 | LED | TBD | | "the light above every fader" -- TBD which LEDs those are |
 
-Shift and the arrow buttons are among the global buttons (TBD which).
+## DAW mode defaults (stock fw 013, captured 2026-11-22)
+
+Mackie Control layout. The stock firmware sends everything identically on **both** USB MIDI ports
+(`SMC-Mixer-Private` and `SMC-Mixer-Master`); all on channel 1 unless noted.
+
+| control | message |
+|---|---|
+| K1..K8 | CC 16..23, relative sign-magnitude: `1` = one step right, `65` = one step left (MCU V-Pot) |
+| F1..F8 | touch: Note 104..111 on (127) / off when the fader starts / stops moving; value: **pitch bend on channel 1..8**, -8192..8191 |
+| F9 | TBD (MCU master would be pitch bend ch 9 + touch note 112) |
+| T*n*.1 (top row) | Note 16+*n*-1 (MCU Mute 1..8) |
+| T*n*.2 | Note 8+*n*-1 (MCU Solo) |
+| T*n*.3 | Note 0+*n*-1 (MCU Rec arm) |
+| T*n*.4 (bottom row) | Note 24+*n*-1 (MCU Select) |
+| Play / Pause / Record | Note 94 / 93 / 95 (MCU Play / Stop / Record) |
+| Rewind / Fast-forward | Note 91 / 92 |
+| `<<` / `>>` | Note 46 / 47 (MCU Fader bank left / right) |
+| Up / Down / Left / Right | Note 96 / 97 / 98 / 99 (MCU cursor keys) |
+| Shift, Bluetooth | nothing |
+
+Buttons: Note on velocity 127 on press, Note off on release.
+Shift has no effect in stock DAW mode (Shift + Up / Down send the same as Up / Down). Shift + Left /
+Right switches DAW / CC mode silently (no MIDI); the lit arrow shows the mode.
+LEDs (track buttons, knob indicators) are driven by the host (MCU feedback), not locally.
 
 ## Resolution order
 
@@ -36,13 +60,13 @@ layer that defines the control**:
 2. page `p`, normal layer
 3. all pages, Shift layer (only when Shift is held)
 4. all pages, normal layer
-5. **DAW default** (what the stock DAW mode sends: table TBD from the capture)
+5. **DAW default** (what the stock DAW mode sends, see the table above)
 
 A mapping can also be **"disabled"** (send nothing), which is different from "not defined" (inherit).
 
 Reserved, not remappable: **Shift** itself, **Shift + Left / Shift + Right** (page down / up) and
 **Shift + Up / Shift + Down** (mode switch, see below). Plain arrows keep their DAW meaning
-(bank / channel) unless overridden.
+(MCU cursor keys) unless overridden; `<<` / `>>` are the DAW's bank buttons.
 
 Note: in the **stock** firmware, Shift + Left / Right switches between DAW and CC mode. Ours moves
 mode switching to Shift + Up / Down so Left / Right can page.
@@ -139,8 +163,7 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 
 ## Open questions
 
-- DAW-mode defaults per control (capture of fw 013 DAW mode).
-- Button names, which buttons are Shift / Left / Right / Up / Down; which LEDs sit above the faders.
-- What the stock Shift + Left / Right mode switch sends over MIDI, if anything (capture it).
+- F9 (master fader) in DAW mode.
+- Which LEDs sit above the faders; which LEDs the host can drive with MCU feedback.
 - Which modes Shift + Up / Down should cycle through.
 - DAW banking with plain arrows in our firmware: reproduce the stock messages exactly (TBD).
