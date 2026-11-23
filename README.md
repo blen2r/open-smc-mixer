@@ -60,7 +60,7 @@ JieLi toolchain, see [fw/README.md](fw/README.md#building); Python 3 with
 [uv](https://docs.astral.sh/uv/) (or `mido` and `python-rtmidi` installed); `dfu-util`.
 
 ```sh
-git clone --recursive https://github.com/blen2r/open-smc-pad && cd open-smc-pad
+git clone --recursive https://github.com/blen2r/open-smc-mixer && cd open-smc-mixer
 
 BOARD=mixer fw/boot/build.sh                                        # bootloader + installer
 BOARD=mixer host/package_fw.sh bootonly
