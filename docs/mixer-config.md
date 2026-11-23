@@ -20,7 +20,7 @@ the base and anything can be overridden**, per page and per Shift layer:
 | group | count | id range | notes |
 |---|---|---|---|
 | knob | 8 | `K1..K8` | endless encoders, no push switch; LED ring/indicator driven by the host |
-| fader | 9 | `F1..F9` | not motorized; F1 is the leftmost, F9 = master (TBD: sent nothing in capture) |
+| fader | 8 | `F1..F8` | not motorized; F1 is the leftmost (no master fader) |
 | track button | 8 x 4 | `T1.1..T8.4` | column x row, top row = 1; have LEDs |
 | global button | 11 | `G1..G11` | bottom row, left to right: Play, Pause, Record, Rewind, Fast-forward, `<<`, `>>`, Up, Down, Left, Right |
 | oval button | 2 | `O1`, `O2` | top right: O1 = Bluetooth, O2 = **Shift** (neither sends MIDI) |
@@ -35,7 +35,6 @@ Mackie Control layout. The stock firmware sends everything identically on **both
 |---|---|
 | K1..K8 | CC 16..23, relative sign-magnitude: `1` = one step right, `65` = one step left (MCU V-Pot) |
 | F1..F8 | touch: Note 104..111 on (127) / off when the fader starts / stops moving; value: **pitch bend on channel 1..8**, -8192..8191 |
-| F9 | TBD (MCU master would be pitch bend ch 9 + touch note 112) |
 | T*n*.1 (top row) | Note 16+*n*-1 (MCU Mute 1..8) |
 | T*n*.2 | Note 8+*n*-1 (MCU Solo) |
 | T*n*.3 | Note 0+*n*-1 (MCU Rec arm) |
@@ -163,7 +162,6 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 
 ## Open questions
 
-- F9 (master fader) in DAW mode.
 - Which LEDs sit above the faders; which LEDs the host can drive with MCU feedback.
 - Which modes Shift + Up / Down should cycle through.
 - DAW banking with plain arrows in our firmware: reproduce the stock messages exactly (TBD).
