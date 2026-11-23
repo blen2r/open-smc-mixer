@@ -131,7 +131,7 @@ In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
      e. Mode bar on {bold}DAW{off}: click {bold}Down{off}: Type CC, channel 1, CC number {bold}71{off} (momentary).
      f. Same card, Focus groups: in the {bold}Track Stop{off} row, box {bold}6{off}: {bold}64{off} (the template name
         above becomes "custom").
-     g. Same card, "Shift + button: the fader sends": {bold}Shift + Track Stop{off} -> {bold}channel pressure{off}.
+     g. Same card, "Shift + Button: fader modes": {bold}Shift + Track Stop{off} -> {bold}channel pressure{off}.
   3. {bold}Save to mixer{off}. (Leave the editor open; you can tick "highlight controls" and watch the
      monitor during the hardware checks.)
 """

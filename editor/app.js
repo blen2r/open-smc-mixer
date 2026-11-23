@@ -250,7 +250,7 @@ function renderGlobals() {
     c1 += field('Solo', `<select id="gSolo">${opt('mute', soloMode, 'mutes the other channels')}${opt('cc', soloMode, 'sends a CC')}${opt('off', soloMode, 'nothing')}</select>`,
       'Mutes the other channels: for devices without a solo CC; while any strip is soloed, every other channel gets the Mute CC, and their own mute states come back when solo ends. Sends a CC: the device\'s own solo, toggled 127 / 0 on the strip\'s channel. The LED shows the solo either way.');
     if (soloMode === 'cc') c1 += field('Solo CC', ccIn('gCcS', g.cc_solo), 'The CC Solo toggles between 127 (soloed) and 0, on the strip\'s channel.');
-    c1 += `<h3>Shift + button: the fader sends${tipIcon('Shift + a strip button switches that strip\'s fader to what is set here (the button blinks); the button again switches it back. Nothing: Shift + the button does what the button does.')}</h3>`;
+    c1 += `<h3>Shift + Button: fader modes${tipIcon('Shift + a strip button switches that strip\'s fader to what is set here (the button blinks); the button again switches it back. Nothing: Shift + the button does what the button does.')}</h3>`;
     ['Mute', 'Solo', 'Rec', 'Track Stop'].forEach((b, k) => {
       const v = g.fader_special[k], kind = v === null ? 'off' : typeof v === 'number' ? 'cc' : v;
       c1 += field(`Shift + ${b}`, `<span class="combo"><select class="gSpK" data-k="${k}">${opt('off', kind, 'nothing')}${opt('cc', kind, 'CC')}${opt('pitchbend', kind, 'pitch bend')}${opt('pressure', kind, 'channel pressure')}</select>` +
