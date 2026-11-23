@@ -19,18 +19,19 @@ import time
 
 import mido
 
-# docs/mixer-hardware.md: key code -> what the stock settings put there (inferred)
-STRIPS = [("13", "23", "33", "43"), ("B3", "A3", "93", "83"), ("C3", "D3", "E3", "F3"),
-          ("12", "22", "32", "42"), ("B2", "A2", "92", "82"), ("C2", "D2", "E2", "F2"),
-          ("61", "51", "41", "31"), ("91", "A1", "B1", "C1")]
+# docs/mixer-hardware.md: key code (physical column << 4 | row) -> control, confirmed 2026-11-22.
+# The stock firmware numbers columns one higher (its scan stores each sample one step late).
+STRIPS = [("03", "13", "23", "33"), ("A3", "93", "83", "73"), ("B3", "C3", "D3", "E3"),
+          ("02", "12", "22", "32"), ("A2", "92", "82", "72"), ("B2", "C2", "D2", "E2"),
+          ("51", "41", "31", "21"), ("81", "91", "A1", "B1")]
 ROWS = ("Mute (top)", "Solo", "Rec", "Select (bottom)")
 NAMES = {int(code, 16): f"strip {s + 1} {ROWS[r]}" for s, codes in enumerate(STRIPS)
          for r, code in enumerate(codes)}
-for code, name in zip(("53", "63", "73", "03", "52", "62", "72", "02", "11", "21", "D1", "71", "81"),
+for code, name in zip(("43", "53", "63", "F3", "42", "52", "62", "F2", "01", "11", "C1", "71", "61"),
                       ("Play", "Pause", "Record", "Rewind", "Fast-forward", "<<", ">>", "Up", "Down",
-                       "Left", "Right", "Shift or Bluetooth", "Shift or Bluetooth")):
+                       "Left", "Right", "Shift", "Bluetooth")):
     NAMES[int(code, 16)] = name
-ENCODER_COLS = {c: (c - 1) // 2 + 1 if c else 8 for c in range(16)}  # pairs 1/2, 3/4, ... 15/0
+ENCODER_COLS = {c: c // 2 + 1 for c in range(16)}                  # knob n = columns 2n-2, 2n-1
 ADC_PIN = {0: "PA0", 1: "PA1", 2: "PA3", 3: "PA4", 4: "PA6", 10: "PC2", 11: "PC4", 12: "PC5"}
 
 
@@ -50,7 +51,7 @@ def describe(msg):
         down = msg.type == "note_on" and msg.velocity > 0
         what = NAMES.get(code, "?")
         if row == 0:
-            what = f"knob contact (pair {ENCODER_COLS[col]}? turning a knob moves two columns)"
+            what = f"knob {ENCODER_COLS[col]} contact"
         return f"key {code:02X}  col {col:2d} row {row}  {'DOWN' if down else 'up  '}  {what}"
     if msg.type == "control_change" and msg.channel == 5:
         return f"fader ADC ch {msg.control:2d} ({ADC_PIN.get(msg.control, '?')})  value {msg.value:3d}"

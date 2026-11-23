@@ -57,12 +57,12 @@ struct boot_diag {
 #define BOOT_CRASH_LIMIT    3u          /* the 4th boot in a row that was never confirmed: DFU */
 
 #ifdef BOARD_SMC_MIXER
-/* Held at power-up: stay in the bootloader. Key codes (column << 4 | sense row PB0..PB3) of the
- * mixer's matrix (docs/mixer-hardware.md): play = 0x53; shift is 0x71 or 0x81 (the two oval
- * buttons, which one is which is not confirmed yet), so either of them + play counts. */
-#define DFU_KEY_PLAY        0x53u
+/* Held at power-up: stay in the bootloader. Physical key codes (driven column << 4 | sense row
+ * PB0..PB3) of the mixer's matrix, measured (docs/mixer-hardware.md): play 0x43, shift 0x71.
+ * (Bootloader 0108 as first installed used 0x53 + 0x71/0x81, i.e. pause + shift or bluetooth.) */
+#define DFU_KEY_PLAY        0x43u
 #define DFU_KEY_SHIFT_A     0x71u
-#define DFU_KEY_SHIFT_B     0x81u
+#define DFU_KEY_SHIFT_B     0x71u
 #else
 /* Held at power-up: stay in the bootloader. Columns of the key matrix, sense line 1 (PC1):
  * 0 shift, 1 note repeat, 2 bluetooth, 3 pad bank, 4 knob bank, 5 left, 6 right, 7 play,
