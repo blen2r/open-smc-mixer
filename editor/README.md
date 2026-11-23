@@ -31,3 +31,11 @@ in the browser.
 
 Files: `config.js` (format, encode / decode, resolution, base profile descriptions; also loads in
 Node for tests), `device.js` (Web MIDI and the simulated mixer), `app.js` (the page).
+
+## QA
+
+`host/mixer_qa.py` (Python with `mido`) checks the editor and the firmware together: you import
+`host/qa/qa_config.json` in the editor, make four listed changes and save; the script reads the
+configuration back and compares it, then walks you through 28 hardware checks ("turn knob 1 right")
+and verifies the MIDI the mixer sends on USB. Your configuration is backed up first and restored at
+the end. `--no-editor` skips the editor part, `--from N` resumes at a check.
