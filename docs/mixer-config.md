@@ -116,6 +116,42 @@ the value, so you can see exactly when you've hit it (a blinking LED makes that 
 
 The page-change blink (above) uses the same LEDs and takes priority for its ~1 s.
 
+## OP-XY profile (the user's main use, 2026-11-22)
+
+The mixer drives a Teenage Engineering OP-XY **over Bluetooth MIDI**; one MIDI channel per OP-XY
+track (16). Official OP-XY CC table (guide section 23, "midi cc reference table"): track volume
+CC 7, track mute CC 9, track pan CC 10, all on channels 1-16; no solo CC. The user uses CC 12-15
+for a track's 4 parameters (the table itself lists "track parameters" as CC 46 -- to check).
+
+Strip *n* = OP-XY track / channel *n* (a second page could cover tracks 9-16).
+
+| control | does |
+|---|---|
+| fader *n* | volume: CC 7, channel *n* (pickup + mismatch LED as everywhere) |
+| Mute *n* | toggles mute: CC 9 = 127 / 0 on channel *n*; LED = muted |
+| Solo *n* | toggles solo -- the OP-XY has none, so the mixer does it: it mutes (CC 9) the other tracks and restores them when solo goes off; LED = soloed (suggestion, TBD) |
+| Play | play / stop toggle (the stock DAW note 94 worked on the OP-XY; whether to send MIDI Start / Stop instead is TBD) |
+| knob *k* | by default its own mapping from the editor; if none: CC 12 on channel *k*. Knobs are relative, the OP-XY wants absolute values: the mixer keeps the value per (channel, CC) and sends it |
+| Rec *n* | **focus group A**: knobs 1-4 send CC 12-15 on channel *n*. One strip at a time (Rec on another strip moves it); LED lit while focused; pressing it again goes back to the default mappings |
+| Select *n* | **focus group B**: same for knobs 5-8 |
+
+### Fader special modes (Shift + strip button), toggles, LED blinks while active
+
+| combo | fader *n* then sends (channel *n*) |
+|---|---|
+| Shift + Mute | mod wheel (CC 1) |
+| Shift + Solo | pitch bend (14 bit; center detent behaviour TBD) |
+| Shift + Rec | suggestion: channel pressure (aftertouch) |
+| Shift + Select | suggestion: pan (CC 10, latched) |
+| Shift + move a fader (no button) | suggestion: pan (CC 10) while Shift is held, momentary |
+
+Pressing the same combo again returns the fader to normal (volume). Each mode keeps its own
+value for pickup / mismatch LED.
+
+These are behaviours more than plain mappings (focus groups, solo-by-muting, special modes): the
+mapping model gets a few "behaviour" types for them, configurable in the editor, with this
+profile as the default layout.
+
 ### Step-sequencer pages (later)
 
 Idea from the user (2026-11-22, inspired by "Take a look inside Richie Hawtin's DJ setup", Native
