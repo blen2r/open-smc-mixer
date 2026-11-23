@@ -26,11 +26,10 @@
 #include "smcpad_rt.h"
 #include "mixer_config.h"
 
-#define FW_VERSION          0x0003
-#define STORE_KEY_CONFIG    2               /* version 2 or 3, MCFG_MAX_BYTES */
-#define V2_HEADER           64
+#define FW_VERSION          0x0004
+#define STORE_KEY_CONFIG    2               /* version 2, 3 or 4, MCFG_MAX_BYTES */
 
-_Static_assert(sizeof(mcfg_header_t) == MCFG_HEADER, "mcfg_header_t must match the 80-byte header");
+_Static_assert(sizeof(mcfg_header_t) == MCFG_HEADER, "mcfg_header_t must match the 84-byte header");
 _Static_assert(MCFG_HEADER + MCFG_MAX_ENTRIES * MCFG_ENTRY <= MCFG_MAX_BYTES, "entries must fit");
 _Static_assert(sizeof(mcfg_entry_t) == MCFG_ENTRY, "mcfg_entry_t must be 10 bytes");
 
@@ -110,13 +109,17 @@ static void profile_defaults(mcfg_header_t *h)
     h->cc_mute = 9;
     h->cc_encoder = 12;
     h->cc_solo = MCFG_NONE;                         /* the OP-XY has no solo CC: Solo mutes */
-    /* Rec: encoders 1-4, Track stop: encoders 5-8 = the focused track's four parameters, CC 12-15 */
+    /* Rec: encoders 1-4, Track Stop: encoders 5-8 = the focused track's four parameters, CC 12-15 */
     memset(h->focus, MCFG_NONE, sizeof(h->focus));
     for (int k = 0; k < 4; k++) {
         h->focus[0][k] = (u8)(12 + k);
         h->focus[1][4 + k] = (u8)(12 + k);
     }
-    h->cc_flags = MCC_SOLO_MUTES | MCC_SPECIAL;
+    h->cc_flags = MCC_SOLO_MUTES;
+    h->fader_special[0] = 1;                        /* Shift + Mute: mod wheel */
+    h->fader_special[1] = MCFG_FM_PITCHBEND;        /* Shift + Solo */
+    h->fader_special[2] = MCFG_FM_PRESSURE;         /* Shift + Rec */
+    h->fader_special[3] = 10;                       /* Shift + Track Stop: pan */
     memset(h->name, 0, sizeof(h->name));
     memcpy(h->name, name, sizeof(name) - 1);
 }
@@ -191,34 +194,47 @@ static int store_active(void)
     return smcpad_store_write(STORE_KEY_CONFIG, active, MCFG_MAX_BYTES) == MCFG_MAX_BYTES;
 }
 
-/* A version 2 configuration (in staging, as read from the key) into version 3 (in active): the
- * header is the same up to the name; cc_focus (one CC) becomes the two groups it meant: Rec =
- * encoders 1-4 on cc_focus..+3, Track stop = encoders 5-8 on the same. */
-static int convert_v2(const u8 *v2, u8 *out)
+/* A version 2 or 3 configuration (in staging, as read from the key) into version 4 (in active).
+ * The header is the same up to the name. Version 2's cc_focus (one CC) becomes the two groups it
+ * meant (Rec = encoders 1-4 on cc_focus..+3, Track Stop = encoders 5-8 on the same); version 3's
+ * MCC_SPECIAL flag becomes fader_special = mod wheel / pitch bend / pressure / pan, as it meant. */
+#define OLD_SPECIAL 0x02
+static int convert_old(const u8 *old, u8 *out)
 {
-    const u32 magic = v2[0] | v2[1] << 8 | v2[2] << 16 | (u32)v2[3] << 24;
-    u16 version = v2[4] | v2[5] << 8, n = v2[6] | v2[7] << 8;
-    u32 crc = v2[60] | v2[61] << 8 | v2[62] << 16 | (u32)v2[63] << 24;
-    u8 focus = v2[29];
+    const u32 magic = old[0] | old[1] << 8 | old[2] << 16 | (u32)old[3] << 24;
+    u16 version = old[4] | old[5] << 8, n = old[6] | old[7] << 8;
+    u32 hl = version == 2 ? 64 : 80;
+    u32 crc = old[hl - 4] | old[hl - 3] << 8 | old[hl - 2] << 16 | (u32)old[hl - 1] << 24;
     mcfg_header_t *h = (mcfg_header_t *)out;
 
-    if (magic != MCFG_MAGIC || version != 2 || n > MCFG_MAX_ENTRIES || crc != crc_of(v2, V2_HEADER, n)) {
+    if (magic != MCFG_MAGIC || (version != 2 && version != 3) || n > MCFG_MAX_ENTRIES ||
+        crc != crc_of(old, hl, n)) {
         return 0;
     }
     defaults(out);
-    memcpy(out + 8, v2 + 8, 60 - 8);                /* mode .. name: same places */
+    memcpy(out + 8, old + 8, 60 - 8);               /* mode .. name: same places */
     h->version = MCFG_VERSION;
-    h->cc_solo = MCFG_NONE;
     h->rsv1 = 0;
-    memset(h->focus, MCFG_NONE, sizeof(h->focus));
-    if (!(focus & MCFG_NONE)) {
-        for (int k = 0; k < 4; k++) {
-            h->focus[0][k] = (u8)((focus + k) & 127);
-            h->focus[1][4 + k] = (u8)((focus + k) & 127);
+    if (version == 2) {
+        u8 focus = old[29];
+
+        h->cc_solo = MCFG_NONE;
+        memset(h->focus, MCFG_NONE, sizeof(h->focus));
+        if (!(focus & MCFG_NONE)) {
+            for (int k = 0; k < 4; k++) {
+                h->focus[0][k] = (u8)((focus + k) & 127);
+                h->focus[1][4 + k] = (u8)((focus + k) & 127);
+            }
         }
+    } else {
+        memcpy(h->focus, old + 60, sizeof(h->focus));
     }
+    if (!(h->cc_flags & OLD_SPECIAL)) {
+        memset(h->fader_special, MCFG_NONE, sizeof(h->fader_special));
+    }                                               /* else: the defaults, which are those */
+    h->cc_flags &= ~OLD_SPECIAL;
     h->n_entries = n;
-    memcpy(out + MCFG_HEADER, v2 + V2_HEADER, n * MCFG_ENTRY);
+    memcpy(out + MCFG_HEADER, old + hl, n * MCFG_ENTRY);
     h->crc32 = blob_crc(out);
     return blob_ok(out, blob_len(out));
 }
@@ -230,7 +246,7 @@ void mcfg_begin(void)
         defaults(active);
     } else if (blob_len(staging) <= MCFG_MAX_BYTES && blob_ok(staging, blob_len(staging))) {
         memcpy(active, staging, MCFG_MAX_BYTES);
-    } else if (convert_v2(staging, active)) {
+    } else if (convert_old(staging, active)) {
         store_active();                             /* the user's settings, in the new format */
     } else {
         defaults(active);

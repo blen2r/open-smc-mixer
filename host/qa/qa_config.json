@@ -16,7 +16,7 @@
  "cc_encoder": 12,
  "solo_mutes": false,
  "cc_solo": 8,
- "special_modes": true,
+ "fader_special": [21, "pitchbend", null, 10],
  "focus_rec": [null, null, 60, null, null, 61, 62, null],
  "focus_stop": [null, null, null, null, null, null, null, null],
  "mappings": [

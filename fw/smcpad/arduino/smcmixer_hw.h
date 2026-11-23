@@ -4,7 +4,7 @@
  *
  * Numbering (the stock firmware's panel order):
  *   buttons  0..31  track strips: 4 * strip + row (strip 0..7 left to right, row 0 Mute (top),
- *                   1 Solo, 2 Rec, 3 Track stop (bottom))
+ *                   1 Solo, 2 Rec, 3 Track Stop (bottom))
  *            32..36 Play, Pause, Record, Rewind, Fast-forward
  *            37..42 <<, >>, Up, Down, Left, Right
  *            43     Bluetooth (upper oval), 44 Shift (lower oval)

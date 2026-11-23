@@ -25,7 +25,7 @@ console must stay free of errors.
 ## 2. Guided hardware run
 
 Flash the build (`host/mixer_update.sh`), keep any Bluetooth device (the OP-XY) **disconnected**
-(the checks send test messages), no strip soloed, no Rec / Track stop focus lit. Then:
+(the checks send test messages), no strip soloed, no Rec / Track Stop focus lit. Then:
 
 ```sh
 python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with mido --with python-rtmidi ...)
@@ -33,16 +33,18 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
 
 1. It backs your configuration up to `work/qa_backup_<time>.json` (restored at the end; on a rerun
    it finds your last real backup instead of backing up its own test configuration).
-2. **Editor round trip.** You import `host/qa/qa_config.json` in the editor, make six listed
+2. **Editor round trip.** You import `host/qa/qa_config.json` in the editor, make seven listed
    changes (in both modes), save; the script reads the configuration back and compares it with
    what it should be.
-3. **47 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script
+3. **53 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script
    checks every MIDI message the mixer sends on USB, and knows which control you touched and on
    which page (wrong control, wrong page and stray messages are reported as such). A few ask
    yes / no about an LED. Covered:
    - encoders: CC, value ranges, program change, pitch bend, disabled, the CC profile's encoder CC;
-   - focus groups: Rec focus on chosen encoders, an empty slot left alone, Track stop sharing an
+   - focus groups: Rec focus on chosen encoders, an empty slot left alone, Track Stop sharing an
      encoder (both buttons blink, Rec goes off), focus off;
+   - fader special modes: Shift + Mute turns fader 5 to its CC (blinking LED), Mute alone back;
+     Shift + Rec with nothing set behaves as Rec;
    - faders: CC, pressure, Shift layer, pickup with the LED, page-only mappings and ranges;
    - buttons: toggle, momentary, trigger, program change, base explicitly, mappings removed and
      added in the editor, the profile's mute and Solo CC;

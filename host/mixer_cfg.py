@@ -17,8 +17,8 @@ import zlib
 import mido
 
 MAGIC = b"SMXC"
-VERSION = 3
-HEADER = 80
+VERSION = 4
+HEADER = 84
 ENTRY = 10
 MAX_ENTRIES = 238
 MAX_BYTES = 2464                                # stored size (mixer_config.h)
@@ -26,7 +26,8 @@ NONE = 0x80
 NAME_LEN = 28
 TYPES = ["disabled", "cc", "note", "program", "pitchbend", "pressure", "base"]
 MODES = ["daw", "cc"]
-HEAD_FMT = "<4sHHBBBBBBBBB8sBBBBBBB28s8s8sI"  # editor/config.js, mixer_config.h
+HEAD_FMT = "<4sHHBBBBBBBBB8sBBBBBBB28s8s8s4sI"  # editor/config.js, mixer_config.h
+SPECIAL = {"pitchbend": 0x81, "pressure": 0x82}
 
 
 def pack7(data):
@@ -105,7 +106,7 @@ class Mixer:
 
 def decode(blob):
     (magic, ver, n, mode, takeover, led, follow, remember, accel, a3, a2, pages, tb,
-     ccf, ccfs, ccm, cce, ccs, flags, _, name, frec, fsel, _crc) = struct.unpack_from(HEAD_FMT, blob)
+     ccf, ccfs, ccm, cce, ccs, flags, _, name, frec, fsel, fsp, _crc) = struct.unpack_from(HEAD_FMT, blob)
     assert magic == MAGIC, magic
     if ver != VERSION:
         raise SystemExit(f"configuration version {ver}: update the mixer's firmware")
@@ -115,7 +116,8 @@ def decode(blob):
                accel=bool(accel), accel_ms_x3=a3, accel_ms_x2=a2, pages=pages, track_base=list(tb),
                name=name.split(b"\0")[0].decode("ascii", "replace"),
                cc_fader=cc(ccf), cc_fader_shift=cc(ccfs), cc_mute=cc(ccm), cc_encoder=cc(cce),
-               solo_mutes=bool(flags & 1), cc_solo=cc(ccs) if flags & 4 else None, special_modes=bool(flags & 2),
+               solo_mutes=bool(flags & 1), cc_solo=cc(ccs) if flags & 4 else None,
+               fader_special=[{0x81: "pitchbend", 0x82: "pressure"}.get(b, cc(b)) for b in fsp],
                focus_rec=[cc(b) for b in frec], focus_stop=[cc(b) for b in fsel], mappings=[])
     for i in range(n):
         c, layer, t, ch, num, fl, lo, hi = blob[HEADER + i * ENTRY: HEADER + i * ENTRY + 8]
@@ -127,12 +129,15 @@ def decode(blob):
 
 def normalize_settings(o):
     """Profile fields of older exports and templates, as the editor's normalizeSettings():
-    cc_knob -> cc_encoder; cc_focus (Rec = encoders 1-4 on it and the 3 next, Track stop = 5-8 on the
+    cc_knob -> cc_encoder; cc_focus (Rec = encoders 1-4 on it and the 3 next, Track Stop = 5-8 on the
     same) -> focus_rec / focus_stop."""
     o = dict(o)
     if "cc_knob" in o:
         o.setdefault("cc_encoder", o["cc_knob"])
         del o["cc_knob"]
+    if "special_modes" in o:                # up to version 3: one switch for a fixed set
+        sm = o.pop("special_modes")
+        o.setdefault("fader_special", [1, "pitchbend", "pressure", 10] if sm else [None] * 4)
     if "focus_select" in o:                 # the first version 3 editor's name for focus_stop
         o.setdefault("focus_stop", o["focus_select"])
         del o["focus_select"]
@@ -149,7 +154,8 @@ def normalize(cfg):
     cfg = normalize_settings(cfg)
     base = cfg.pop("base", None)
     out = dict(mode="daw" if base == "daw" else "cc" if base else "daw", name="OP-XY - blen2r" if base != "daw" else "",
-               cc_fader=7, cc_fader_shift=10, cc_mute=9, cc_encoder=12, solo_mutes=True, cc_solo=None, special_modes=True,
+               cc_fader=7, cc_fader_shift=10, cc_mute=9, cc_encoder=12, solo_mutes=True, cc_solo=None,
+               fader_special=[1, "pitchbend", "pressure", 10],
                focus_rec=[12, 13, 14, 15] + [None] * 4, focus_stop=[None] * 4 + [12, 13, 14, 15])
     out.update(cfg)
     out.pop("version", None)
@@ -167,12 +173,13 @@ def encode(cfg):
         int(cfg["remember_values"]), int(cfg["accel"]), cfg["accel_ms_x3"], cfg["accel_ms_x2"], cfg["pages"],
         bytes(cfg["track_base"]), cc(cfg["cc_fader"]), cc(cfg["cc_fader_shift"]), cc(cfg["cc_mute"]),
         cc(cfg["cc_encoder"]), cc(cfg["cc_solo"]),
-        int(cfg["solo_mutes"]) | int(cfg["special_modes"]) << 1 | (4 if cfg["cc_solo"] is not None else 0), 0,
-        name, bytes(cc(v) for v in cfg["focus_rec"]), bytes(cc(v) for v in cfg["focus_stop"]), 0))
+        int(cfg["solo_mutes"]) | (4 if cfg["cc_solo"] is not None else 0), 0,
+        name, bytes(cc(v) for v in cfg["focus_rec"]), bytes(cc(v) for v in cfg["focus_stop"]),
+        bytes(SPECIAL[v] if v in SPECIAL else cc(v) for v in cfg["fader_special"]), 0))
     ents = b"".join(bytes([m["control"], m["page"] | (16 if m["shift"] else 0) | (0x20 if m.get("mode") == "daw" else 0),
                            TYPES.index(m["type"]), m["channel"] - 1, m["number"], m["flags"], m["min"], m["max"], 0, 0])
                     for m in maps)
-    struct.pack_into("<I", head, 76, zlib.crc32(bytes(head) + ents))
+    struct.pack_into("<I", head, 80, zlib.crc32(bytes(head) + ents))
     return bytes(head) + ents
 
 

@@ -2,12 +2,12 @@
  * SMC-Mixer configuration: the model of docs/mixer-config.md, stored in the VM and edited over
  * USB-MIDI SysEx by the web editor (editor/).
  *
- * Binary layout, version 3 (little endian; the editor builds and parses the same bytes,
+ * Binary layout, version 4 (little endian; the editor builds and parses the same bytes,
  * editor/config.js):
  *
- *   header, 80 bytes
+ *   header, 84 bytes
  *     0  "SMXC"                magic
- *     4  u16 version           3
+ *     4  u16 version           4
  *     6  u16 n_entries
  *     8  u8  mode              0 = DAW (stock DAW mode, Mackie), 1 = CC. The mode the mixer is in:
  *                              Shift + Left / Right change it and store it.
@@ -28,16 +28,20 @@
  *    29  u8  cc_solo           with MCC_SOLO_CC: Solo toggles this CC 127 / 0 on the strip's channel
  *                              (version 2: cc_focus, see focus below)
  *    30  u8  cc_flags          MCC_SOLO_MUTES: Solo mutes the other tracks (with cc_mute; wins
- *                              over MCC_SOLO_CC); MCC_SOLO_CC: Solo sends cc_solo; neither: nothing;
- *                              MCC_SPECIAL: Shift + Mute / Solo / Rec / Track stop = fader modes
+ *                              over MCC_SOLO_CC); MCC_SOLO_CC: Solo sends cc_solo; neither: nothing
+ *                              (0x02 was MCC_SPECIAL up to version 3, see fader_special)
  *    31  u8  reserved
  *    32  char name[28]         the template the profile came from ("OP-XY - blen2r"), NUL padded
- *    60  u8  focus[2][8]       the focus groups, [0] = Rec, [1] = Track stop: Rec on a strip makes
+ *    60  u8  focus[2][8]       the focus groups, [0] = Rec, [1] = Track Stop: Rec on a strip makes
  *                              encoder k send CC focus[0][k] on that strip's channel, for every k
  *                              that is not MCFG_NONE (the others stay as they are); again: off.
  *                              A group of only MCFG_NONE: the button sends nothing.
- *    76  u32 crc32             (zlib) over the header with this field 0, then the entries
- *   entries, 10 bytes each, at 80
+ *    76  u8  fader_special[4]  Shift + Mute / Solo / Rec / Track Stop: what that strip's fader
+ *                              sends until the button is pressed again: a CC (0..127),
+ *                              MCFG_FM_PITCHBEND, MCFG_FM_PRESSURE, or MCFG_NONE (Shift + the
+ *                              button does what the button does without Shift)
+ *    80  u32 crc32             (zlib) over the header with this field 0, then the entries
+ *   entries, 10 bytes each, at 84
  *     0  u8  control           MCTL_* below
  *     1  u8  layer             bits 0..3 page (0 = all pages, 1..8), bit 4 = Shift layer,
  *                              bit 5 = DAW mode (0: the mapping is for CC mode)
@@ -49,8 +53,9 @@
  *     7  u8  max               value sent for "on" / the high end
  *     8  u8  reserved[2]
  *
- * Version 2 (64-byte header: cc_focus at 29, one CC for both groups, no focus[], crc32 at 60, up to
- * 240 entries) is read once and converted. Both are stored as MCFG_MAX_BYTES under the same key.
+ * Versions 2 (64-byte header: cc_focus at 29, one CC for both groups, no focus[], crc32 at 60, up
+ * to 240 entries) and 3 (80-byte header, crc32 at 76; MCC_SPECIAL = mod wheel / pitch bend /
+ * pressure / pan) are read once and converted. All are stored as MCFG_MAX_BYTES under one key.
  */
 #ifndef MIXER_CONFIG_H
 #define MIXER_CONFIG_H
@@ -58,8 +63,8 @@
 #include <stdint.h>
 
 #define MCFG_MAGIC          0x43584D53u     /* "SMXC" little endian */
-#define MCFG_VERSION        3
-#define MCFG_HEADER         80
+#define MCFG_VERSION        4
+#define MCFG_HEADER         84
 #define MCFG_ENTRY          10
 #define MCFG_MAX_ENTRIES    238
 #define MCFG_MAX_BYTES      2464            /* stored size, as version 2: header + entries fit */
@@ -68,8 +73,9 @@
 #define MCFG_LAYER_SHIFT    0x10
 #define MCFG_LAYER_DAW      0x20
 #define MCFG_NONE           0x80            /* "no CC" in the profile fields */
+#define MCFG_FM_PITCHBEND   0x81            /* fader_special: pitch bend */
+#define MCFG_FM_PRESSURE    0x82            /* fader_special: channel pressure */
 #define MCC_SOLO_MUTES      0x01
-#define MCC_SPECIAL         0x02
 #define MCC_SOLO_CC         0x04
 #define MCFG_NAME_LEN       28
 
@@ -117,7 +123,8 @@ typedef struct {
     uint8_t track_base[MCFG_PAGES];
     uint8_t cc_fader, cc_fader_shift, cc_mute, cc_encoder, cc_solo, cc_flags, rsv1;
     char name[MCFG_NAME_LEN];
-    uint8_t focus[2][8];                    /* [0] = Rec, [1] = Track stop */
+    uint8_t focus[2][8];                    /* [0] = Rec, [1] = Track Stop */
+    uint8_t fader_special[4];               /* Shift + Mute / Solo / Rec / Track Stop */
     uint32_t crc32;
 } __attribute__((packed)) mcfg_header_t;
 

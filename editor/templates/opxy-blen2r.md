@@ -20,8 +20,8 @@ the LED above the fader of the new page's number blinks for a second.
 | Mute | toggles mute: CC 9 = 127 / 0; the LED shows it |
 | Solo | toggles solo: the other tracks are muted (CC 9) while any track is soloed (the OP-XY has no solo CC) |
 | Rec | focus: encoders 1-4 send CC 12-15 (the track's four parameters) of this track; again: back to normal |
-| Track stop | focus: encoders 5-8 send CC 12-15 of this track; again: back to normal. Rec and Track stop use different encoders, so both can be on (on different tracks) |
-| Shift + Mute / Solo / Rec / Track stop | the fader becomes mod wheel (CC 1) / pitch bend / channel pressure / pan (CC 10) for this track; the button blinks; the button again ends it |
+| Track Stop | focus: encoders 5-8 send CC 12-15 of this track; again: back to normal. Rec and Track Stop use different encoders, so both can be on (on different tracks) |
+| Shift + Mute / Solo / Rec / Track Stop | the fader becomes mod wheel (CC 1) / pitch bend / channel pressure / pan (CC 10) for this track; the button blinks; the button again ends it |
 | Play | note 94: start / stop |
 | other transport and arrow buttons | the stock DAW notes (Pause 93, Record 95, << 46, >> 47, Up 96, Down 97) |
 

@@ -250,12 +250,17 @@ function renderGlobals() {
     c1 += field('Solo', `<select id="gSolo">${opt('mute', soloMode, 'mutes the other tracks')}${opt('cc', soloMode, 'sends a CC')}${opt('off', soloMode, 'nothing')}</select>`,
       'Mutes the other tracks: for devices without a solo CC (the OP-XY); while any track is soloed, every other track gets the Mute CC, and their own mute states come back when solo ends. Sends a CC: the device\'s own solo, toggled 127 / 0 on the strip\'s track. The LED shows the solo either way.');
     if (soloMode === 'cc') c1 += field('Solo CC', ccIn('gCcS', g.cc_solo), 'The CC Solo toggles between 127 (soloed) and 0, on the strip\'s track channel.');
-    c1 += field('Special modes', `<input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}>`, 'Shift + Mute / Solo / Rec / Track stop turn that strip\'s fader into mod wheel / pitch bend / channel pressure / pan (CC 10). The button blinks while it is on; press it again to go back to the fader CC.');
+    c1 += `<h3>Shift + button: the fader sends${tipIcon('Shift + a strip button switches that strip\'s fader to what is set here (the button blinks); the button again switches it back. Nothing: Shift + the button does what the button does.')}</h3>`;
+    ['Mute', 'Solo', 'Rec', 'Track Stop'].forEach((b, k) => {
+      const v = g.fader_special[k], kind = v === null ? 'off' : typeof v === 'number' ? 'cc' : v;
+      c1 += field(`Shift + ${b}`, `<select class="gSpK" data-k="${k}">${opt('off', kind, 'nothing')}${opt('cc', kind, 'CC')}${opt('pitchbend', kind, 'pitch bend')}${opt('pressure', kind, 'channel pressure')}</select>` +
+        (kind === 'cc' ? `<input type="number" class="gSpC" data-k="${k}" min="0" max="127" value="${v}">` : ''));
+    });
     const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
       `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
-    let c2 = `<h3>Focus groups${tipIcon('Rec (or Track stop) on a strip turns its group on for that strip\'s track: each encoder with a CC in the row sends that CC on the track\'s channel; press again: off. Typical use: the track\'s parameters on the encoders.')}</h3><p class="hint">One box per encoder (1-8).</p>`;
+    let c2 = `<h3>Focus groups${tipIcon('Rec (or Track Stop) on a strip turns its group on for that strip\'s track: each encoder with a CC in the row sends that CC on the track\'s channel; press again: off. Typical use: the track\'s parameters on the encoders.')}</h3><p class="hint">One box per encoder (1-8).</p>`;
     c2 += `<div class="flabel">Rec${tipIcon('Encoders with a CC here send it on the track whose Rec you pressed. An empty box leaves that encoder as it is. All empty: Rec does nothing.')}</div>${focusRow('focus_rec', 'gFoR')}`;
-    c2 += `<div class="flabel">Track stop${tipIcon('The same for the Track stop button (the bottom button of each strip). If both rows use the same encoder, only one group can be on: turning one on blinks both buttons and turns the other off.')}</div>${focusRow('focus_stop', 'gFoS')}`;
+    c2 += `<div class="flabel">Track Stop${tipIcon('The same for the Track Stop button (the bottom button of each strip). If both rows use the same encoder, only one group can be on: turning one on blinks both buttons and turns the other off.')}</div>${focusRow('focus_stop', 'gFoS')}`;
     if (focusOverlap(g)) c2 += '<p class="hint">These groups overlap (same encoder in both): only one can be on at a time.</p>';
     let c3 = '<h3>Pages and tracks</h3>';
     c3 += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`, 'How many pages Shift + Rewind / Fast-forward go through (1-8).');
@@ -295,7 +300,11 @@ function renderGlobals() {
       g.cc_encoder = cc('#gCcK', true);
       document.querySelectorAll('.gFoR').forEach(el => { g.focus_rec[+el.dataset.k] = box(el); });
       document.querySelectorAll('.gFoS').forEach(el => { g.focus_stop[+el.dataset.k] = box(el); });
-      g.special_modes = $('#gSpecial').checked;
+      document.querySelectorAll('.gSpK').forEach(el => {
+        const k = +el.dataset.k, cIn = document.querySelector(`.gSpC[data-k="${k}"]`);
+        g.fader_special[k] = el.value === 'off' ? null : el.value !== 'cc' ? el.value
+          : cIn ? box(cIn) ?? 0 : (typeof g.fader_special[k] === 'number' ? g.fader_special[k] : 1);
+      });
       g.pages = Math.max(1, Math.min(8, +$('#gPages').value || 1));
       document.querySelectorAll('.gTb').forEach(el => { g.track_base[+el.dataset.i] = Math.max(1, Math.min(16, +el.value || 1)) - 1; });
       g.follow_incoming = $('#gFollow').checked;
@@ -424,8 +433,8 @@ function templateDoc(t) {
     `| Mute | ${s.cc_mute === null ? 'nothing' : `toggles ${cc(s.cc_mute)} 127 / 0`} |`,
     `| Solo | ${s.solo_mutes ? (s.cc_mute !== null ? 'mutes the other tracks' : 'nothing') : s.cc_solo !== null ? `toggles ${cc(s.cc_solo)} 127 / 0` : 'nothing'} |`,
     `| Rec | ${focusDoc(s.focus_rec)} |`,
-    `| Track stop | ${focusDoc(s.focus_stop)} |`,
-    `| Shift + Mute / Solo / Rec / Track stop | ${s.special_modes ? 'fader special modes: mod wheel / pitch bend / pressure / pan' : 'as without Shift'} |`,
+    `| Track Stop | ${focusDoc(s.focus_stop)} |`,
+    ...['Mute', 'Solo', 'Rec', 'Track Stop'].map((b, k) => `| Shift + ${b} | ${s.fader_special[k] === null ? 'as without Shift' : `the strip's fader sends ${specialText(s.fader_special[k])} (again: back)`} |`),
     '', `Pages: ${s.pages}; strip 1 is track ${s.track_base.slice(0, s.pages).map(x => x + 1).join(' / ')} on page ${[...Array(s.pages).keys()].map(x => x + 1).join(' / ')}.`, ''];
   if (t.mappings.length) {
     lines.push('## Mappings', '', '| control | layer | sends |', '|---|---|---|');

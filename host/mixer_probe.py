@@ -24,7 +24,7 @@ import mido
 STRIPS = [("03", "13", "23", "33"), ("A3", "93", "83", "73"), ("B3", "C3", "D3", "E3"),
           ("02", "12", "22", "32"), ("A2", "92", "82", "72"), ("B2", "C2", "D2", "E2"),
           ("51", "41", "31", "21"), ("81", "91", "A1", "B1")]
-ROWS = ("Mute (top)", "Solo", "Rec", "Track stop (bottom)")
+ROWS = ("Mute (top)", "Solo", "Rec", "Track Stop (bottom)")
 NAMES = {int(code, 16): f"strip {s + 1} {ROWS[r]}" for s, codes in enumerate(STRIPS)
          for r, code in enumerate(codes)}
 for code, name in zip(("43", "53", "63", "F3", "42", "52", "62", "F2", "01", "11", "C1", "71", "61"),

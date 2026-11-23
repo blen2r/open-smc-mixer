@@ -19,9 +19,9 @@ TEMPLATES = ROOT / "editor" / "templates"
 NAME_LEN = 28
 TYPES = {"disabled", "cc", "note", "program", "pitchbend", "pressure", "base"}
 SETTINGS = {"pages", "track_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder",
-            "solo_mutes", "cc_solo", "special_modes", "focus_rec", "focus_stop"}
+            "solo_mutes", "cc_solo", "fader_special", "focus_rec", "focus_stop"}
 NULLABLE = {"cc_fader_shift", "cc_mute", "cc_encoder", "cc_solo"}
-OLD = {"cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_stop", "focus_select": "focus_stop"}
+OLD = {"special_modes": "fader_special", "cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_stop", "focus_select": "focus_stop"}
 
 
 def problems(t, path):
@@ -45,6 +45,11 @@ def problems(t, path):
         v = s.get(k)
         if not (v is None and k in NULLABLE) and not (isinstance(v, int) and 0 <= v <= 127):
             out.append(f"settings: {k} must be 0..127" + (" or null" if k in NULLABLE else ""))
+    fs = s.get("fader_special")
+    if not (isinstance(fs, list) and len(fs) == 4 and
+            all(v is None or v in ("pitchbend", "pressure") or (isinstance(v, int) and 0 <= v <= 127) for v in fs)):
+        out.append('settings: fader_special must be 4 values (Shift + Mute / Solo / Rec / Track Stop), each a CC '
+                   '0..127, "pitchbend", "pressure" or null')
     for k in ("focus_rec", "focus_stop"):
         g = s.get(k)
         if not (isinstance(g, list) and len(g) == 8 and all(v is None or (isinstance(v, int) and 0 <= v <= 127) for v in g)):

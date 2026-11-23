@@ -1,9 +1,11 @@
 // SMC-Mixer configuration: the binary format of fw/smcpad/examples/mixer/mixer_config.h (version
-// 3), shared by the editor and its simulated device. A configuration as an object:
+// 4), shared by the editor and its simulated device. A configuration as an object:
 //   { mode: 'daw'|'cc', fader_takeover: 'jump'|'pickup', fader_led, follow_incoming,
 //     remember_values, accel, accel_ms_x3, accel_ms_x2, pages, track_base[8],
 //     CC mode's profile: name, cc_fader, cc_fader_shift, cc_mute, cc_encoder (a CC number, or null
-//       for none where allowed), solo_mutes, cc_solo (used when solo_mutes is off), special_modes,
+//       for none where allowed), solo_mutes, cc_solo (used when solo_mutes is off),
+//       fader_special[4] (Shift + Mute / Solo / Rec / Track Stop: the fader's CC, 'pitchbend',
+//       'pressure' or null),
 //       focus_rec[8], focus_stop[8] (per encoder: the CC it sends while the group is on, or null),
 //     mappings: [{ mode: 'cc'|'daw', control, page (0 = all), shift, type, channel (1..16), number,
 //                  flags, min, max }] }
@@ -12,7 +14,7 @@
 'use strict';
 
 const CFG = {
-  MAGIC: 'SMXC', VERSION: 3, HEADER: 80, ENTRY: 10, MAX_ENTRIES: 238, MAX_BYTES: 2464,
+  MAGIC: 'SMXC', VERSION: 4, HEADER: 84, ENTRY: 10, MAX_ENTRIES: 238, MAX_BYTES: 2464,
   NONE: 0x80, NAME_LEN: 28, LAYER_SHIFT: 0x10, LAYER_DAW: 0x20,
   TYPES: ['disabled', 'cc', 'note', 'program', 'pitchbend', 'pressure', 'base'],
   MODES: ['daw', 'cc'],
@@ -25,7 +27,7 @@ const CFG = {
 
 // controls: 0..7 encoders, 8..15 faders, 16..60 buttons (smcmixer_hw.h order)
 const CONTROLS = (() => {
-  const rows = ['Mute', 'Solo', 'Rec', 'Track stop'];
+  const rows = ['Mute', 'Solo', 'Rec', 'Track Stop'];
   const bottom = ['Play', 'Pause', 'Record', 'Rewind', 'Fast-forward', '<<', '>>', 'Up', 'Down', 'Left', 'Right'];
   const list = [];
   for (let k = 0; k < 8; k++) list.push({ id: k, kind: 'encoder', name: `Encoder ${k + 1}`, short: `E${k + 1}`, strip: k });
@@ -67,18 +69,18 @@ function baseDescription(cfg, id, page, shift, mode) {
   const name = cfg.name ? `${cfg.name}: ` : '';
   if (c.kind === 'encoder') {
     const fr = cfg.focus_rec[c.strip], fs = cfg.focus_stop[c.strip];
-    const focus = [fr === null ? null : `Rec focus: CC ${fr}`, fs === null ? null : `Track stop focus: CC ${fs}`]
+    const focus = [fr === null ? null : `Rec focus: CC ${fr}`, fs === null ? null : `Track Stop focus: CC ${fs}`]
       .filter(Boolean).join(', ');
     const own = cfg.cc_encoder === null ? 'nothing' : `CC ${cfg.cc_encoder} ch ${tr}`;
     return `${name}${own}${focus ? ` (${focus}, of the focused track)` : ''}`;
   }
   if (c.kind === 'fader') {
     if (shift && cfg.cc_fader_shift !== null) return `${name}CC ${cfg.cc_fader_shift} ch ${tr}`;
-    return `${name}CC ${cfg.cc_fader} ch ${tr}${cfg.special_modes ? ' (Shift + strip button: special modes)' : ''}`;
+    return `${name}CC ${cfg.cc_fader} ch ${tr}${cfg.fader_special.some(v => v !== null) ? ' (Shift + strip button: special modes)' : ''}`;
   }
   if (c.row !== undefined) {
-    if (shift && cfg.special_modes) {
-      return `${name}fader ${c.strip + 1} special mode: ${['mod wheel', 'pitch bend', 'channel pressure', 'pan'][c.row]}`;
+    if (shift && cfg.fader_special[c.row] !== null) {
+      return `${name}fader ${c.strip + 1} special mode: ${specialText(cfg.fader_special[c.row])} (again: back)`;
     }
     const what = [
       cfg.cc_mute === null ? null : `mute track ${tr} (CC ${cfg.cc_mute})`,
@@ -107,7 +109,7 @@ function baseShort(cfg, id, page, shift, mode) {
   if (c.kind === 'encoder') return cfg.cc_encoder === null ? '—' : `CC${cfg.cc_encoder} ch${tr}`;
   if (c.kind === 'fader') return shift && cfg.cc_fader_shift !== null ? `CC${cfg.cc_fader_shift} ch${tr}` : `CC${cfg.cc_fader} ch${tr}`;
   if (c.row !== undefined) {
-    if (shift && cfg.special_modes) return ['→ mod', '→ bend', '→ press', '→ pan'][c.row];
+    if (shift && cfg.fader_special[c.row] !== null) return `→ ${specialShort(cfg.fader_special[c.row])}`;
     return [cfg.cc_mute === null ? '—' : `mute T${tr}`, soloText(cfg, tr) ? `solo T${tr}` : '—',
             focusUsed(cfg.focus_rec) ? `focus T${tr}` : '—', focusUsed(cfg.focus_stop) ? `focus T${tr}` : '—'][c.row];
   }
@@ -121,7 +123,14 @@ function soloText(cfg, tr) {
   return cfg.cc_solo !== null ? `solo track ${tr} (CC ${cfg.cc_solo})` : null;
 }
 
-// Focus groups (Rec / Track stop): per encoder a CC or null.
+// Fader special modes (Shift + a strip button): a CC, 'pitchbend', 'pressure' or null.
+const SPECIAL_BYTES = { pitchbend: 0x81, pressure: 0x82 };
+const specialByte = v => (v === null || v === undefined ? CFG.NONE : SPECIAL_BYTES[v] || (v & 127));
+const specialVal = b => (b === 0x81 ? 'pitchbend' : b === 0x82 ? 'pressure' : b & CFG.NONE ? null : b);
+const specialText = v => (v === 'pitchbend' ? 'pitch bend' : v === 'pressure' ? 'channel pressure' : `CC ${v}${v === 1 ? ' (mod wheel)' : v === 10 ? ' (pan)' : ''}`);
+const specialShort = v => (v === 'pitchbend' ? 'bend' : v === 'pressure' ? 'press' : `CC${v}`);
+
+// Focus groups (Rec / Track Stop): per encoder a CC or null.
 const focusUsed = g => g.some(v => v !== null);
 const focusOverlap = cfg => cfg.focus_rec.some((v, k) => v !== null && cfg.focus_stop[k] !== null);
 function focusText(g, tr) {
@@ -139,10 +148,10 @@ function crc32(bytes) {
 }
 
 // CC mode's profile and what a template carries
-const PROFILE_FIELDS = ['name', 'cc_fader', 'cc_fader_shift', 'cc_mute', 'cc_encoder', 'solo_mutes', 'cc_solo', 'special_modes',
+const PROFILE_FIELDS = ['name', 'cc_fader', 'cc_fader_shift', 'cc_mute', 'cc_encoder', 'solo_mutes', 'cc_solo', 'fader_special',
                         'focus_rec', 'focus_stop'];
 const TEMPLATE_SETTINGS = ['pages', 'track_base', 'follow_incoming', 'cc_fader', 'cc_fader_shift', 'cc_mute', 'cc_encoder',
-                           'solo_mutes', 'cc_solo', 'special_modes', 'focus_rec', 'focus_stop'];
+                           'solo_mutes', 'cc_solo', 'fader_special', 'focus_rec', 'focus_stop'];
 const N = null;
 
 function defaultConfig() {
@@ -152,7 +161,7 @@ function defaultConfig() {
     remember_values: true, accel: true, accel_ms_x3: 6, accel_ms_x2: 12, pages: 2,
     track_base: [0, 8, 0, 8, 0, 8, 0, 8],
     name: 'OP-XY - blen2r', cc_fader: 7, cc_fader_shift: 10, cc_mute: 9, cc_encoder: 12,
-    solo_mutes: true, cc_solo: null, special_modes: true,
+    solo_mutes: true, cc_solo: null, fader_special: [1, 'pitchbend', 'pressure', 10],
     focus_rec: [12, 13, 14, 15, N, N, N, N], focus_stop: [N, N, N, N, 12, 13, 14, 15],
     mappings: [],
   };
@@ -184,10 +193,11 @@ function encodeConfig(cfg) {
   buf[27] = ccByte(cfg.cc_mute);
   buf[28] = ccByte(cfg.cc_encoder);
   buf[29] = ccByte(cfg.cc_solo);
-  buf[30] = (cfg.solo_mutes ? 1 : 0) | (cfg.special_modes ? 2 : 0) | (cfg.cc_solo !== null ? 4 : 0);
+  buf[30] = (cfg.solo_mutes ? 1 : 0) | (cfg.cc_solo !== null ? 4 : 0);
   const name = (cfg.name || '').replace(/[^\x20-\x7e]/g, '?').slice(0, CFG.NAME_LEN);
   for (let i = 0; i < name.length; i++) buf[32 + i] = name.charCodeAt(i);
   for (let k = 0; k < 8; k++) { buf[60 + k] = ccByte(cfg.focus_rec[k]); buf[68 + k] = ccByte(cfg.focus_stop[k]); }
+  for (let k = 0; k < 4; k++) buf[76 + k] = specialByte(cfg.fader_special[k]);
   cfg.mappings.forEach((m, i) => {
     const o = CFG.HEADER + i * CFG.ENTRY;
     buf[o] = m.control;
@@ -199,8 +209,8 @@ function encodeConfig(cfg) {
     buf[o + 6] = m.min & 127;
     buf[o + 7] = m.max & 127;
   });
-  dv.setUint32(76, 0, true);
-  dv.setUint32(76, crc32(buf), true);
+  dv.setUint32(80, 0, true);
+  dv.setUint32(80, crc32(buf), true);
   return buf;
 }
 
@@ -220,7 +230,8 @@ function decodeConfig(buf) {
     track_base: Array.from(buf.slice(17, 25)),
     name: String.fromCharCode(...(end < 0 ? nameBytes : nameBytes.slice(0, end))),
     cc_fader: ccVal(buf[25]), cc_fader_shift: ccVal(buf[26]), cc_mute: ccVal(buf[27]), cc_encoder: ccVal(buf[28]),
-    solo_mutes: !!(buf[30] & 1), cc_solo: buf[30] & 4 ? ccVal(buf[29]) : null, special_modes: !!(buf[30] & 2),
+    solo_mutes: !!(buf[30] & 1), cc_solo: buf[30] & 4 ? ccVal(buf[29]) : null,
+    fader_special: Array.from(buf.slice(76, 80), specialVal),
     focus_rec: Array.from(buf.slice(60, 68), ccVal), focus_stop: Array.from(buf.slice(68, 76), ccVal),
     mappings: [],
   };
@@ -235,8 +246,9 @@ function decodeConfig(buf) {
   return cfg;
 }
 
-// Profile fields of older exports and templates: cc_knob -> cc_encoder; cc_focus (one CC: Rec =
-// encoders 1-4 on it and the 3 next, Track stop = encoders 5-8 on the same) -> the two focus groups.
+// Profile fields of older exports and templates: cc_knob -> cc_encoder; special_modes ->
+// fader_special; cc_focus (one CC: Rec =
+// encoders 1-4 on it and the 3 next, Track Stop = encoders 5-8 on the same) -> the two focus groups.
 function normalizeSettings(o) {
   const out = Object.assign({}, o);
   if ('cc_knob' in out) {
@@ -246,6 +258,10 @@ function normalizeSettings(o) {
   if ('focus_select' in out) {               // the first version 3 editor's name for focus_stop
     if (!('focus_stop' in out)) out.focus_stop = out.focus_select;
     delete out.focus_select;
+  }
+  if ('special_modes' in out) {              // up to version 3: one switch for a fixed set
+    if (!('fader_special' in out)) out.fader_special = out.special_modes ? [1, 'pitchbend', 'pressure', 10] : [null, null, null, null];
+    delete out.special_modes;
   }
   if ('cc_focus' in out) {
     const f = out.cc_focus;

@@ -16,14 +16,15 @@
  *               (MCC_SOLO_CC) toggles CC cc_solo = 127 / 0 instead
  *   Rec         focus group Rec: every encoder k with a CC in focus[0][k] sends that CC on this
  *               track's channel (the others stay as they are); again: off
- *   Track stop  the same with focus[1]. If the two groups share an encoder, only one can be on:
+ *   Track Stop  the same with focus[1]. If the two groups share an encoder, only one can be on:
  *               turning one on blinks both buttons fast for FOCUS_CONFLICT_MS, then the other
  *               goes off and this one on
  *   encoder k   CC cc_encoder on channel track_base + k (absolute: the mixer keeps the value)
  *   Play / Pause / Record / Rewind / FF / << / >> / arrows: the stock DAW notes
- *   Shift + Mute / Solo / Rec / Track stop   (MCC_SPECIAL) fader special mode: mod wheel / pitch
- *               bend / channel pressure / pan (CC 10), toggles; the button's LED blinks while it
- *               is on; the button alone also ends it
+ *   Shift + Mute / Solo / Rec / Track Stop   fader special mode, fader_special[row]: the strip's
+ *               fader sends that CC / pitch bend / channel pressure instead, toggles; the button's
+ *               LED blinks while it is on; the button alone also ends it. MCFG_NONE: Shift + the
+ *               button does what the button does
  * DAW mode: the stock DAW mode (Mackie Control): encoders CC 16-23 relative, faders pitch bend 1-8
  *   with touch notes 104-111, buttons notes; LEDs follow the host.
  * Always:
@@ -58,17 +59,16 @@ static u32 stamp(void)
 
 /* ------------------------------------------------------------------ state */
 
-enum { FM_VOLUME, FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
 
 static u8 page;                                     /* 0-based */
 static u8 mute[16], solo[16], sent_mute[16];        /* CC mode: per track */
-static s8 focus[2] = { -1, -1 };                    /* CC mode: Rec / Track stop group: track, -1 = none */
+static s8 focus[2] = { -1, -1 };                    /* CC mode: Rec / Track Stop group: track, -1 = none */
 #define FOCUS_CONFLICT_MS 500
 static struct {
     u32 at;                                         /* 0 = nothing waiting */
     u8 group, track;
 } focus_wait;                                       /* a group waiting for the other to go off */
-static u8 fader_mode[16];                           /* CC mode: per track, FM_* */
+static u8 fader_mode[16];                           /* CC mode: per track, 0 = normal, row + 1 = special */
 static u8 playing;
 static u32 page_shown_at;
 static u32 boot_combo_since;
@@ -302,20 +302,28 @@ static target_t fader_resolve(int f)
         n.pickup = 0;                       /* a DAW moves to the fader; the LED shows the host */
         return n;
     }
+    if (fader_mode[n.ch]) {                 /* a special mode (Shift + a strip button) */
+        u8 sp = mcfg->fader_special[fader_mode[n.ch] - 1];
+
+        if (sp == MCFG_FM_PITCHBEND) {
+            n.kind = TK_PITCHBEND;
+            return n;
+        }
+        if (sp == MCFG_FM_PRESSURE) {
+            n.kind = TK_PRESSURE;
+            return n;
+        }
+        if (!(sp & MCFG_NONE)) {
+            n.num = sp;
+            return n;
+        }
+    }
     if (n.num & MCFG_NONE) {
         n.kind = TK_NONE;
         return n;
     }
-    switch (mcfg->cc_flags & MCC_SPECIAL ? fader_mode[n.ch] : FM_VOLUME) {
-    case FM_MODWHEEL: n.num = 1; break;
-    case FM_PITCHBEND: n.kind = TK_PITCHBEND; break;
-    case FM_PRESSURE: n.kind = TK_PRESSURE; break;
-    case FM_PAN: n.num = 10; break;
-    default:
-        if (SHIFT_HELD() && !(mcfg->cc_fader_shift & MCFG_NONE)) {
-            n.num = mcfg->cc_fader_shift;   /* Shift + fader (pan for the OP-XY) while held */
-        }
-        break;
+    if (SHIFT_HELD() && !(mcfg->cc_fader_shift & MCFG_NONE)) {
+        n.num = mcfg->cc_fader_shift;       /* Shift + fader (pan for the OP-XY) while held */
     }
     return n;
 }
@@ -623,7 +631,7 @@ static void focus_tick(void)
     }
 }
 
-/* Rec (g = 0) / Track stop (g = 1) of track t pressed */
+/* Rec (g = 0) / Track Stop (g = 1) of track t pressed */
 static void focus_press(int g, int t)
 {
     if (focus_wait.at) {                    /* pressed during a blink: finish it first */
@@ -643,7 +651,7 @@ static void focus_press(int g, int t)
     }
 }
 
-/* the LED of Rec / Track stop of track t: on while focused; both buttons of a conflict blink fast */
+/* the LED of Rec / Track Stop of track t: on while focused; both buttons of a conflict blink fast */
 static int focus_led(int g, int t, int fast)
 {
     if (focus_wait.at && ((g == focus_wait.group && t == focus_wait.track) || (g != focus_wait.group && t == focus[g]))) {
@@ -654,17 +662,16 @@ static int focus_led(int g, int t, int fast)
 
 static void cc_strip_button(int strip, int row, int down)
 {
-    static const u8 mode_of_row[4] = { FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
     int t = track_of(strip);
-    u8 m = mode_of_row[row];
+    u8 m = (u8)(row + 1);
 
     if (!down) {
         return;
     }
     /* Shift + the button: the fader's special mode on / off; the button alone while its mode is
      * on (its LED blinking) also just ends the mode */
-    if ((mcfg->cc_flags & MCC_SPECIAL) && (SHIFT_HELD() || fader_mode[t] == m)) {
-        fader_mode[t] = fader_mode[t] == m ? FM_VOLUME : m;
+    if (fader_mode[t] == m || (SHIFT_HELD() && mcfg->fader_special[row] != MCFG_NONE)) {
+        fader_mode[t] = fader_mode[t] == m ? 0 : m;
         fader_retarget(strip);
         return;
     }
@@ -746,7 +753,6 @@ static void button(int b, int down)
 
 static void leds_update(void)
 {
-    static const u8 mode_of_row[4] = { FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
     u32 now = smcpad_millis();
     int blink = (now / 250) & 1, fast = (now / 60) & 1;
     int page_blink = page_shown_at && now - page_shown_at < 1000;
@@ -767,7 +773,7 @@ static void leds_update(void)
         } else if (mcfg->mode == MODE_CC && b < 32) {
             int s = b / 4, row = b % 4, t = track_of(s);
 
-            if ((mcfg->cc_flags & MCC_SPECIAL) && fader_mode[t] == mode_of_row[row]) {
+            if (fader_mode[t] == row + 1) {
                 on = blink;
             } else {
                 on = row == 0 ? sent_mute[t] : row == 1 ? solo[t] : focus_led(row - 2, t, fast);
@@ -933,6 +939,7 @@ void mixer_config_changed(void)
     }
     memset(btn_toggle, 0, sizeof(btn_toggle));
     focus[0] = focus[1] = -1;               /* the groups may have changed */
+    memset(fader_mode, 0, sizeof(fader_mode));  /* and the special modes */
     focus_wait.at = 0;
     for (int f = 0; f < NUM_STRIPS; f++) {
         fader_target[f].kind = 0xFF;        /* forces a fresh retarget */

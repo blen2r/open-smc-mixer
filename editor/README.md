@@ -28,7 +28,7 @@ in the browser.
 - **CC mode profile** (the card above the drawing): what CC mode sends where nothing is mapped, for
   one device: **Choose a template…**, **Save as template…** ([templates/README.md](templates/README.md)),
   and the fields a template sets (**Show details**; hidden at first). Every field has a **?** that explains it on hover:
-  - **Focus groups**: one row of 8 boxes for Rec, one for Track stop, one box per encoder. Rec on a
+  - **Focus groups**: one row of 8 boxes for Rec, one for Track Stop, one box per encoder. Rec on a
     strip makes each encoder with a CC in its box send that CC on the strip's track; empty boxes
     leave the encoder alone. If both rows use the same encoder, only one group can be on at a time
     (on the mixer, both buttons blink and the other group goes off).
@@ -53,4 +53,4 @@ Node for tests), `device.js` (Web MIDI and the simulated mixer), `app.js` (the p
 ## QA
 
 See [QA.md](../QA.md): `host/selftest.py` offline, `host/mixer_qa.py` on the hardware (the editor
-round trip and 47 guided checks).
+round trip and 53 guided checks).
