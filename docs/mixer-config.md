@@ -63,16 +63,14 @@ layer that defines the control**:
 
 A mapping can also be **"disabled"** (send nothing), which is different from "not defined" (inherit).
 
-Reserved, not remappable: **Shift** itself, **Shift + Left / Shift + Right** (page down / up) and
-**Shift + Up / Shift + Down** (mode switch, see below). Plain arrows keep their DAW meaning
-(MCU cursor keys) unless overridden; `<<` / `>>` are the DAW's bank buttons.
-
-Note: in the **stock** firmware, Shift + Left / Right switches between DAW and CC mode. Ours moves
-mode switching to Shift + Up / Down so Left / Right can page.
+Reserved, not remappable: **Shift** itself, **Shift + Rewind / Shift + Fast-forward** (page down /
+up) and **Shift + Left / Shift + Right** (mode switch, as in the stock firmware, so existing users
+are not surprised). Plain Rewind / FF and the arrows keep their DAW meaning unless overridden;
+`<<` / `>>` are the DAW's bank buttons. Shift + Up / Down is free (remappable).
 
 ### Modes
 
-Shift + Up / Down cycles the mode. Proposed set (TBD):
+Shift + Left / Right selects the mode, like stock (the lit arrow shows which). Proposed set (TBD):
 
 - **custom**: DAW base + overrides, pages, Shift layer (the normal mode).
 - **plain DAW**: overrides ignored, exactly the stock DAW behaviour (useful to check whether an
@@ -83,8 +81,8 @@ Mode kept across power cycles; the change is shown with an LED pattern (TBD).
 ## Pages
 
 - 8 pages, current page kept across power cycles.
-- Shift + Right: page + 1, Shift + Left: page - 1 (no wrap-around -- TBD).
-  (Stock firmware uses this combination for DAW/CC mode; ours uses Shift + Up / Down for that.)
+- Shift + Fast-forward: page + 1, Shift + Rewind: page - 1 (no wrap-around -- TBD).
+  (Stock Shift + Rewind / FF send the same as Rewind / FF, so no stock behaviour is lost.)
 - On a page change the fader LED `Lp` **blinks fast** for ~1 s with the other fader LEDs off,
   then the LEDs go back to what they showed (mismatch lights, button LEDs of the new page).
   Blinking is free for this because our mismatch light is solid.
@@ -180,5 +178,5 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 ## Open questions
 
 - Which LEDs sit above the faders; which LEDs the host can drive with MCU feedback.
-- Which modes Shift + Up / Down should cycle through.
+- Which modes Shift + Left / Right should select.
 - DAW banking with plain arrows in our firmware: reproduce the stock messages exactly (TBD).
