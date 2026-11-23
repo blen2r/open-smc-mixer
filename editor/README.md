@@ -27,7 +27,7 @@ in the browser.
   all pages + Shift, all pages, then the mode.
 - **CC mode profile** (the card above the drawing): what CC mode sends where nothing is mapped, for
   one device: **Choose a template…**, **Save as template…** ([templates/README.md](templates/README.md)),
-  and the fields a template sets (**Show details**):
+  and the fields a template sets (**Show details**; hidden at first). Every field has a **?** that explains it on hover:
   - **Focus groups**: one row of 8 boxes for Rec, one for Track stop, one box per encoder. Rec on a
     strip makes each encoder with a CC in its box send that CC on the strip's track; empty boxes
     leave the encoder alone. If both rows use the same encoder, only one group can be on at a time

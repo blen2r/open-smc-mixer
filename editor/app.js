@@ -2,7 +2,7 @@
 'use strict';
 
 const $ = s => document.querySelector(s);
-const state = { profileOpen: (() => { try { return localStorage.getItem('smc-mixer-profile-open') !== '0'; } catch (e) { return true; } })(), link: null, cfg: null, saved: '', page: 0, shift: false, mode: 'daw', sel: null, loadedMode: null,
+const state = { profileOpen: (() => { try { return localStorage.getItem('smc-mixer-profile-open') === '1'; } catch (e) { return false; } })(), link: null, cfg: null, saved: '', page: 0, shift: false, mode: 'daw', sel: null, loadedMode: null,
                 templates: [], faders: new Array(8).fill(0) };
 
 function toast(msg, err) {
@@ -125,8 +125,13 @@ function setHere(id, m) {
   refreshAll();
 }
 
-function field(label, html) {
-  return `<div class="row"><label>${label}</label>${html}</div>`;
+function field(label, html, tip) {
+  return `<div class="row"><label>${label}${tip ? tipIcon(tip) : ''}</label>${html}</div>`;
+}
+
+// a "?" that explains the item next to it, on hover or keyboard focus
+function tipIcon(text) {
+  return `<span class="tip" tabindex="0" data-tip="${esc(text)}" aria-label="${esc(text)}">?</span>`;
 }
 
 function renderEditor() {
@@ -237,39 +242,39 @@ function renderGlobals() {
   ph += '<p class="hint">What CC mode sends where nothing is mapped, for one device. A template sets this card and CC mode\'s mappings; your preferences (Settings) and DAW mode stay. Backup / Restore (top) save the whole mixer instead.</p>';
   if (state.profileOpen) {
     let c1 = '<h3>Controls</h3>';
-    c1 += field('Fader CC', ccIn('gCcF', g.cc_fader));
-    c1 += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true) + '<span class="hint">empty: as without Shift</span>');
-    c1 += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true) + '<span class="hint">empty: nothing (unless focused)</span>');
-    c1 += field('Mute CC', ccIn('gCcM', g.cc_mute, true) + '<span class="hint">toggles 127 / 0; empty: nothing</span>');
-    c1 += field('Solo', `<label><input type="checkbox" id="gSolo" ${g.solo_mutes ? 'checked' : ''}> mutes the other tracks</label>`);
-    c1 += field('Special modes', `<label><input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}> Shift + Mute / Solo / Rec / Track stop: fader = mod wheel / pitch bend / pressure / pan</label>`);
+    c1 += field('Fader CC', ccIn('gCcF', g.cc_fader), 'Each fader sends this CC on its strip\'s track channel (OP-XY: 7, volume).');
+    c1 += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true), 'While Shift is held, faders send this CC instead (OP-XY: 10, pan). Empty: the same as without Shift.');
+    c1 += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true), 'Each encoder sends this CC on its strip\'s track channel, as an absolute value the mixer keeps. Empty: encoders send nothing, unless a focus group is on.');
+    c1 += field('Mute CC', ccIn('gCcM', g.cc_mute, true), 'Mute toggles this CC between 127 (muted) and 0; the LED shows it. Empty: Mute sends nothing.');
+    c1 += field('Solo', `<input type="checkbox" id="gSolo" ${g.solo_mutes ? 'checked' : ''}>`, 'For devices without a solo CC: Solo mutes every other track (with the Mute CC) while any track is soloed, and puts their own mute states back when solo ends.');
+    c1 += field('Special modes', `<input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}>`, 'Shift + Mute / Solo / Rec / Track stop turn that strip\'s fader into mod wheel / pitch bend / channel pressure / pan (CC 10). The button blinks while it is on; press it again to go back to the fader CC.');
     const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
       `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
-    let c2 = '<h3>Focus groups</h3><p class="hint">Rec (or Track stop) on a strip makes the encoders below send these CCs on that strip\'s track; again: off. An empty box leaves that encoder as it is. All empty: the button does nothing. If both groups use the same encoder, turning one on blinks both buttons and turns the other off.</p>';
-    c2 += `<div class="flabel">Rec</div>${focusRow('focus_rec', 'gFoR')}<div class="flabel">Track stop</div>${focusRow('focus_stop', 'gFoS')}`;
+    let c2 = `<h3>Focus groups${tipIcon('Rec (or Track stop) on a strip turns its group on for that strip\'s track: each encoder with a CC in the row sends that CC on the track\'s channel; press again: off. Typical use: the track\'s parameters on the encoders.')}</h3><p class="hint">One box per encoder (1-8).</p>`;
+    c2 += `<div class="flabel">Rec${tipIcon('Encoders with a CC here send it on the track whose Rec you pressed. An empty box leaves that encoder as it is. All empty: Rec does nothing.')}</div>${focusRow('focus_rec', 'gFoR')}`;
+    c2 += `<div class="flabel">Track stop${tipIcon('The same for the Track stop button (the bottom button of each strip). If both rows use the same encoder, only one group can be on: turning one on blinks both buttons and turns the other off.')}</div>${focusRow('focus_stop', 'gFoS')}`;
     if (focusOverlap(g)) c2 += '<p class="hint">These groups overlap (same encoder in both): only one can be on at a time.</p>';
     let c3 = '<h3>Pages and tracks</h3>';
-    c3 += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`);
-    c3 += '<p class="hint">Track of strip 1, per page. Strips 2-8 are the next tracks (after 16: 1 again). The track is the MIDI channel of the strip\'s fader, encoder and buttons. To send one control elsewhere, map it.</p><div class="tb">' +
+    c3 += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`, 'How many pages Shift + Rewind / Fast-forward go through (1-8).');
+    c3 += `<div class="flabel">Track of strip 1${tipIcon('Per page: strip 1 is this track, strips 2-8 the next ones (after 16: 1 again). The track is the MIDI channel of the strip\'s fader, encoder and buttons. To send one control somewhere else, map it.')}</div><div class="tb">` +
       g.track_base.map((t, i) => `<label>page ${i + 1}<input type="number" class="gTb" data-i="${i}" min="1" max="16" value="${t + 1}"></label>`).join('') + '</div>';
-    c3 += field('Follow incoming', `<input type="checkbox" id="gFollow" ${g.follow_incoming ? 'checked' : ''}><span class="hint">CC / pitch bend / pressure received set the known value</span>`);
+    c3 += field('Follow incoming', `<input type="checkbox" id="gFollow" ${g.follow_incoming ? 'checked' : ''}>`, 'CC / pitch bend / pressure the device sends back become the controls\' known values: encoders continue from them, faders pick them up. Never sent back out (no loops).');
     ph += `<div class="pgrid"><div>${c1}</div><div>${c2}</div><div>${c3}</div></div>`;
   }
   pp.innerHTML = ph;
 
   // the settings panel
   let html = '<h2>Settings</h2>';
-  html += field('Mixer mode', `<select id="gMode">${opt('daw', g.mode, 'DAW (Mackie, as stock)')}${opt('cc', g.mode, 'CC')}</select>`);
-  html += '<p class="hint">On the mixer: Shift + Left = DAW, Shift + Right = CC (the lit arrow shows the mode while Shift is held). The mode is kept across power cycles. CC mode\'s profile is the card above the drawing.</p>';
+  html += field('Mixer mode', `<select id="gMode">${opt('daw', g.mode, 'DAW (Mackie, as stock)')}${opt('cc', g.mode, 'CC')}</select>`, 'DAW: the stock Mackie Control layout, for a computer DAW. CC: the profile above, for a device. On the mixer: Shift + Left = DAW, Shift + Right = CC (the lit arrow shows the mode while Shift is held). Kept across power cycles.');
   html += '<h3>Faders</h3>';
-  html += field('Takeover', `<select id="gTk">${opt('pickup', g.fader_takeover, 'pickup')}${opt('jump', g.fader_takeover, 'jump')}</select>`);
-  html += field('Mismatch LED', `<input type="checkbox" id="gLed" ${g.fader_led ? 'checked' : ''}>`);
+  html += field('Takeover', `<select id="gTk">${opt('pickup', g.fader_takeover, 'pickup')}${opt('jump', g.fader_takeover, 'jump')}</select>`, 'Pickup: a fader that is not where its value is sends nothing until you move it through the value (no jumps). Jump: it sends its position at once. A mapping can override this.');
+  html += field('Mismatch LED', `<input type="checkbox" id="gLed" ${g.fader_led ? 'checked' : ''}>`, 'The LED above a fader is lit while the fader is not at its value (it needs picking up) and goes off when it gets there.');
   html += '<h3>Values</h3>';
-  html += field('Remember', `<input type="checkbox" id="gRemember" ${g.remember_values ? 'checked' : ''}><span class="hint">across power cycles</span>`);
+  html += field('Remember', `<input type="checkbox" id="gRemember" ${g.remember_values ? 'checked' : ''}>`, 'Keep the known values (where each fader and encoder value is) across power cycles; saved 5 s after the last change.');
   html += '<h3>Encoder acceleration</h3>';
-  html += field('Acceleration', `<input type="checkbox" id="gAccel" ${g.accel ? 'checked' : ''}>`);
-  html += field('x3 under', `<input type="number" id="gA3" min="1" max="100" value="${g.accel_ms_x3}"> ms between steps`);
-  html += field('x2 under', `<input type="number" id="gA2" min="1" max="100" value="${g.accel_ms_x2}"> ms`);
+  html += field('Acceleration', `<input type="checkbox" id="gAccel" ${g.accel ? 'checked' : ''}>`, 'Turning an encoder fast moves the value further per step. A mapping can turn it on or off for one encoder.');
+  html += field('x3 under', `<input type="number" id="gA3" min="1" max="100" value="${g.accel_ms_x3}"> ms`, 'Steps closer together than this count three times.');
+  html += field('x2 under', `<input type="number" id="gA2" min="1" max="100" value="${g.accel_ms_x2}"> ms`, 'Steps closer together than this (and not under the x3 time) count twice.');
   p.innerHTML = html;
 
   const cc = (sel, none) => { const v = $(sel).value.trim(); return v === '' && none ? null : Math.max(0, Math.min(127, +v || 0)); };

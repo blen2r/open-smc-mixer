@@ -127,7 +127,7 @@ In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
      a. Click {bold}Encoder 1{off}, change the CC number 20 -> {bold}22{off}.
      b. Click {bold}Strip 4 Mute{off} (marked disabled), click {bold}Remove mapping{off}.
      c. Click {bold}Down{off}: Type CC, channel 1, CC number {bold}52{off}, Button {bold}toggle{off}.
-     d. CC mode profile card (Show details if hidden): {bold}Pages 3{off}.
+     d. CC mode profile card at the top, click {bold}Show details{off}: {bold}Pages 3{off}.
      e. Mode bar on {bold}DAW{off}: click {bold}Down{off}: Type CC, channel 1, CC number {bold}71{off} (momentary).
      f. Same card, Focus groups: in the {bold}Track stop{off} row, box {bold}6{off}: {bold}64{off} (the template name
         above becomes "custom").
