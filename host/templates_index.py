@@ -18,10 +18,10 @@ ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "editor" / "templates"
 NAME_LEN = 28
 TYPES = {"disabled", "cc", "note", "program", "pitchbend", "pressure", "base"}
-SETTINGS = {"pages", "track_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder",
+SETTINGS = {"pages", "channel_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder",
             "solo_mutes", "cc_solo", "fader_special", "focus_rec", "focus_stop"}
 NULLABLE = {"cc_fader_shift", "cc_mute", "cc_encoder", "cc_solo"}
-OLD = {"special_modes": "fader_special", "cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_stop", "focus_select": "focus_stop"}
+OLD = {"track_base": "channel_base", "special_modes": "fader_special", "cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_stop", "focus_select": "focus_stop"}
 
 
 def problems(t, path):
@@ -56,9 +56,9 @@ def problems(t, path):
             out.append(f"settings: {k} must be 8 values, each a CC 0..127 or null (one per encoder)")
     if not (isinstance(s.get("pages"), int) and 1 <= s["pages"] <= 8):
         out.append("settings: pages must be 1..8")
-    tb = s.get("track_base")
+    tb = s.get("channel_base")
     if not (isinstance(tb, list) and len(tb) == 8 and all(isinstance(x, int) and 0 <= x <= 15 for x in tb)):
-        out.append("settings: track_base must be 8 numbers 0..15 (0 = track 1)")
+        out.append("settings: channel_base must be 8 numbers 0..15 (0 = channel 1)")
     maps = t.get("mappings")
     if not isinstance(maps, list):
         return out + ['missing "mappings"']

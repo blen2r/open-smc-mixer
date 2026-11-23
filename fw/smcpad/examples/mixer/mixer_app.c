@@ -8,7 +8,7 @@
  * the mode while Shift is held; the mode is stored). Each mode has its own mappings.
  *
  * CC mode: the profile in the configuration (mixer_config.h, cc_*; the editor's templates, e.g.
- * "OP-XY - blen2r"). Strip n of page p = track / MIDI channel track_base[p] + n:
+ * "OP-XY - blen2r"). Strip n of page p sends on MIDI channel channel_base[p] + n:
  *   fader       CC cc_fader (takeover per setting; the LED above it is lit while it has not
  *               picked its value up); Shift + fader: CC cc_fader_shift while Shift is held
  *   Mute        toggles mute, CC cc_mute = 127 / 0
@@ -19,7 +19,7 @@
  *   Track Stop  the same with focus[1]. If the two groups share an encoder, only one can be on:
  *               turning one on blinks both buttons fast for FOCUS_CONFLICT_MS, then the other
  *               goes off and this one on
- *   encoder k   CC cc_encoder on channel track_base + k (absolute: the mixer keeps the value)
+ *   encoder k   CC cc_encoder on channel channel_base + k (absolute: the mixer keeps the value)
  *   Play / Pause / Record / Rewind / FF / << / >> / arrows: the stock DAW notes
  *   Shift + Mute / Solo / Rec / Track Stop   fader special mode, fader_special[row]: the strip's
  *               fader sends that CC / pitch bend / channel pressure instead, toggles; the button's
@@ -87,7 +87,7 @@ int mixer_current_page(void)
 
 static int track_of(int strip)
 {
-    return (mcfg->track_base[page] + strip) & 15;
+    return (mcfg->channel_base[page] + strip) & 15;
 }
 
 /* ------------------------------------------------------------------ MIDI out */

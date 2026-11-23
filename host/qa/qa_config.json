@@ -8,7 +8,7 @@
  "accel_ms_x3": 6,
  "accel_ms_x2": 12,
  "pages": 2,
- "track_base": [0, 8, 0, 8, 0, 8, 0, 8],
+ "channel_base": [0, 8, 0, 8, 0, 8, 0, 8],
  "name": "QA",
  "cc_fader": 7,
  "cc_fader_shift": 10,

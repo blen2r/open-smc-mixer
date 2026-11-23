@@ -84,7 +84,7 @@ console.log(JSON.stringify(out));
         check(o["back"] == o["cfg"], f"{o['what']}: the editor decodes what it encoded")
         if o["what"].startswith("old export"):
             check(M.normalize(OLD_EXPORT) == o["cfg"], "old export: Python normalizes it as the editor")
-            want = dict(cc_encoder=20, fader_special=[None] * 4, focus_rec=[30, 31, 32, 33, None, None, None, None],
+            want = dict(cc_encoder=20, fader_special=[None] * 4, channel_base=[0, 8] * 4, focus_rec=[30, 31, 32, 33, None, None, None, None],
                         focus_stop=[None, None, None, None, 30, 31, 32, 33])
             check(all(o["cfg"].get(k) == v for k, v in want.items()),
                   "old export: cc_knob -> cc_encoder, cc_focus 30 -> Rec 1-4 / Track Stop 5-8 on CC 30-33")

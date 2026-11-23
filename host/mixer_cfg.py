@@ -113,7 +113,7 @@ def decode(blob):
     cc = lambda b: None if b & NONE else b
     cfg = dict(mode=MODES[mode], fader_takeover=["jump", "pickup"][takeover],
                fader_led=bool(led), follow_incoming=bool(follow), remember_values=bool(remember),
-               accel=bool(accel), accel_ms_x3=a3, accel_ms_x2=a2, pages=pages, track_base=list(tb),
+               accel=bool(accel), accel_ms_x3=a3, accel_ms_x2=a2, pages=pages, channel_base=list(tb),
                name=name.split(b"\0")[0].decode("ascii", "replace"),
                cc_fader=cc(ccf), cc_fader_shift=cc(ccfs), cc_mute=cc(ccm), cc_encoder=cc(cce),
                solo_mutes=bool(flags & 1), cc_solo=cc(ccs) if flags & 4 else None,
@@ -135,6 +135,9 @@ def normalize_settings(o):
     if "cc_knob" in o:
         o.setdefault("cc_encoder", o["cc_knob"])
         del o["cc_knob"]
+    if "track_base" in o:                   # before: the same, called track_base
+        o.setdefault("channel_base", o["track_base"])
+        del o["track_base"]
     if "special_modes" in o:                # up to version 3: one switch for a fixed set
         sm = o.pop("special_modes")
         o.setdefault("fader_special", [1, "pitchbend", "pressure", 10] if sm else [None] * 4)
@@ -171,7 +174,7 @@ def encode(cfg):
         HEAD_FMT, MAGIC, VERSION, len(maps), MODES.index(cfg["mode"]),
         ["jump", "pickup"].index(cfg["fader_takeover"]), int(cfg["fader_led"]), int(cfg["follow_incoming"]),
         int(cfg["remember_values"]), int(cfg["accel"]), cfg["accel_ms_x3"], cfg["accel_ms_x2"], cfg["pages"],
-        bytes(cfg["track_base"]), cc(cfg["cc_fader"]), cc(cfg["cc_fader_shift"]), cc(cfg["cc_mute"]),
+        bytes(cfg["channel_base"]), cc(cfg["cc_fader"]), cc(cfg["cc_fader_shift"]), cc(cfg["cc_mute"]),
         cc(cfg["cc_encoder"]), cc(cfg["cc_solo"]),
         int(cfg["solo_mutes"]) | (4 if cfg["cc_solo"] is not None else 0), 0,
         name, bytes(cc(v) for v in cfg["focus_rec"]), bytes(cc(v) for v in cfg["focus_stop"]),

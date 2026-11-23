@@ -102,7 +102,7 @@ static void profile_defaults(mcfg_header_t *h)
     static const char name[] = "OP-XY - blen2r";
 
     for (int p = 0; p < MCFG_PAGES; p++) {
-        h->track_base[p] = (p & 1) ? 8 : 0;         /* tracks 1-8, 9-16, 1-8, ... */
+        h->channel_base[p] = (p & 1) ? 8 : 0;         /* tracks 1-8, 9-16, 1-8, ... */
     }
     h->cc_fader = 7;                                /* volume */
     h->cc_fader_shift = 10;                         /* pan */

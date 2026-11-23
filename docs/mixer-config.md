@@ -122,17 +122,17 @@ The page-change blink (above) uses the same LEDs and takes priority for its ~1 s
 ## CC mode profile
 
 What CC mode does with a control nothing is mapped on (configuration fields `cc_*`, editor:
-the CC mode profile card). Strip *n* of page *p* = track / MIDI channel `track_base[p] + n`.
+the CC mode profile card). Strip *n* of page *p* sends on MIDI channel `channel_base[p] + n`.
 
 | field | control | does |
 |---|---|---|
 | `cc_fader` | fader | this CC on the strip's channel |
 | `cc_fader_shift` | Shift + fader | this CC while Shift is held (none: as without Shift) |
 | `cc_mute` | Mute | toggles this CC 127 / 0; LED = muted (none: Mute sends nothing) |
-| `solo_mutes` | Solo | toggles solo by muting (`cc_mute`) the other tracks while any is soloed |
+| `solo_mutes` | Solo | toggles solo by muting (`cc_mute`) the other channels while any strip is soloed |
 | `cc_solo` | Solo | with `solo_mutes` off: toggles this CC 127 / 0 on the strip's channel (the device's own solo); LED = soloed (none, and `solo_mutes` off: Solo sends nothing) |
 | `cc_encoder` | encoder | this CC on the strip's channel (absolute, the mixer keeps the value; none: nothing) |
-| `focus_rec` | Rec | focus group: 8 slots, one per encoder, each a CC or none. Rec on a strip makes every encoder with a CC send it on that strip's track; the others stay as they are; again: off. All none: Rec sends nothing |
+| `focus_rec` | Rec | focus group: 8 slots, one per encoder, each a CC or none. Rec on a strip makes every encoder with a CC send it on that strip's channel; the others stay as they are; again: off. All none: Rec sends nothing |
 | `focus_stop` | Track Stop | the same, a second group |
 | `fader_special` | Shift + Mute / Solo / Rec / Track Stop | per button: what the strip's fader sends until the button is pressed again: a CC, pitch bend, channel pressure, or nothing (Shift + the button then does what the button does) |
 | | transport, arrows | the stock DAW notes |
@@ -150,7 +150,7 @@ when the profile is edited by hand. The factory profile is the "OP-XY - blen2r" 
 
 `editor/templates/<name>.json` (shared) and `editor/templates/local/` (personal, git-ignored), each
 with a `<name>.md` describing the mapping; `host/templates_index.py` checks them and writes the
-`index.json` lists the editor reads. A template carries the profile, `pages`, `track_base`,
+`index.json` lists the editor reads. A template carries the profile, `pages`, `channel_base`,
 `follow_incoming` and CC-mode mappings; applying one replaces exactly those (DAW mode and the
 personal settings stay). Names contain ` - <author>`. See `editor/templates/README.md`.
 

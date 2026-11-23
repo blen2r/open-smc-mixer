@@ -19,7 +19,7 @@
  *    14  u8  accel_ms_x3       encoder steps closer than this (ms) count x3
  *    15  u8  accel_ms_x2       ... x2
  *    16  u8  pages             1..8
- *    17  u8  track_base[8]     per page: strip s controls track / channel track_base + s
+ *    17  u8  channel_base[8]   per page: strip s sends on MIDI channel channel_base + s
  *   CC mode's profile (what a control does when nothing is mapped):
  *    25  u8  cc_fader          fader: this CC on the strip's channel
  *    26  u8  cc_fader_shift    Shift + fader: this CC (MCFG_NONE: the same as without Shift)
@@ -120,7 +120,7 @@ typedef struct {
     uint16_t version, n_entries;
     uint8_t mode, fader_takeover, fader_led, follow_incoming, remember_values;
     uint8_t accel, accel_ms_x3, accel_ms_x2, pages;
-    uint8_t track_base[MCFG_PAGES];
+    uint8_t channel_base[MCFG_PAGES];
     uint8_t cc_fader, cc_fader_shift, cc_mute, cc_encoder, cc_solo, cc_flags, rsv1;
     char name[MCFG_NAME_LEN];
     uint8_t focus[2][8];                    /* [0] = Rec, [1] = Track Stop */

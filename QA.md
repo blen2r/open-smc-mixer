@@ -48,7 +48,7 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
    - faders: CC, pressure, Shift layer, pickup with the LED, page-only mappings and ranges;
    - buttons: toggle, momentary, trigger, program change, base explicitly, mappings removed and
      added in the editor, the profile's mute and Solo CC;
-   - pages: Shift + Rewind / Fast-forward, per-page track bases, the editor's page count, the page
+   - pages: Shift + Rewind / Fast-forward, per-page channels, the editor's page count, the page
      LED while Shift is held (steady, and in bursts when that fader has a value to pick up);
    - modes: Shift + Left / Right, the arrow LEDs, DAW mode's Mackie messages, per-mode mappings,
      the mode stored in the configuration;
