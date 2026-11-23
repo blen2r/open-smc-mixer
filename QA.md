@@ -78,3 +78,4 @@ Remove checks for behaviour that is gone. A configuration format change also upd
 | date | firmware (commit) | result | notes |
 |---|---|---|---|
 | 2026-11-23 | before modes / templates | 28 / 28 guided | after the fader noise fix |
+| 2026-11-23 | 07211bd (modes, templates) | all good (36 guided + manual) | first run with DAW / CC modes and templates |
