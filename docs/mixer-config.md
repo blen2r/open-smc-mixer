@@ -243,6 +243,12 @@ the Mixer), written double-buffered so a power cut never loses the config.
 
 ## Editor protocol (SysEx)
 
+**Implemented (2026-11-22)**, as below with these details: 8-bit data is sent 8-to-7 packed (one
+byte with the top bits of up to 7 bytes, then those bytes' low 7 bits); the binary layout of the
+configuration is in `fw/smcpad/examples/mixer/mixer_config.h` (header 32 bytes, entries 10 bytes,
+up to 240); `70` enters the bootloader, `71` returns echo diagnostics; `host/mixer_cfg.py` and the
+editor (`editor/`) speak it. Base profiles: `opxy` (default) and `daw`.
+
 Separate from the stock SINCO protocol. Manufacturer ID `7D` (non-commercial / educational),
 then a device byte and a command; 8-bit payloads 7-bit packed like SINCO (LSB first).
 

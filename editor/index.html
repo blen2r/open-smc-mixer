@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMC-Mixer Editor</title>
+<style>
+  :root {
+    --bg: #15171a; --panel: #1e2125; --panel2: #262a2f; --line: #353a41; --text: #e6e8eb;
+    --muted: #9aa1aa; --dim: #6b727b; --accent: #f2a93b; --accent2: #5fb3f9; --ok: #63c27a; --bad: #ef6b6b;
+    --led: #ff5b3a; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; letter-spacing: .02em; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status b { color: var(--text); font-weight: 600; }
+  .dirty { color: var(--accent); }
+  .spacer { flex: 1; }
+  button, select, input { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #1b1b1b; border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--bad); }
+  input[type=number] { width: 70px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 1000px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+  .bar .label { color: var(--muted); margin-right: 4px; }
+  .seg button { border-radius: 0; margin-left: -1px; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .seg button.on { background: var(--accent2); color: #0d1620; border-color: var(--accent2); font-weight: 600; }
+  .seg button.on.shift { background: var(--accent); border-color: var(--accent); }
+  .device { background: linear-gradient(#24272c, #1c1f23); border: 1px solid var(--line); border-radius: 14px; padding: 16px; overflow-x: auto; }
+  .surface { display: grid; grid-template-columns: repeat(8, minmax(86px, 1fr)) 110px; gap: 8px; min-width: 900px; }
+  .strip { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  .ctl { position: relative; border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 5px 6px; cursor: pointer; min-height: 38px; transition: border-color .1s, box-shadow .1s; }
+  .ctl:hover { border-color: var(--muted); }
+  .ctl.sel { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(95,179,249,.35); }
+  .ctl.hit { box-shadow: 0 0 0 3px rgba(242,169,59,.7); }
+  .ctl .n { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ctl .v { font: 12px var(--mono); margin-top: 2px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctl.here .v { color: var(--accent); }
+  .ctl.inherited .v { color: var(--accent2); }
+  .ctl.disabled .v { color: var(--bad); }
+  .ctl.reserved { cursor: default; opacity: .7; }
+  .knob { border-radius: 50px; text-align: center; padding-top: 8px; min-height: 64px; }
+  .knob::before { content: ''; display: block; width: 26px; height: 26px; margin: 0 auto 4px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #555b63, #2b2f34); border: 1px solid #0006; }
+  .led { width: 10px; height: 10px; border-radius: 50%; background: #3a1f1a; margin: 0 auto; border: 1px solid #0006; }
+  .led.on { background: var(--led); box-shadow: 0 0 8px var(--led); }
+  .fader { min-height: 170px; display: flex; flex-direction: column; }
+  .fader .track { flex: 1; margin: 6px auto 2px; width: 8px; border-radius: 4px; background: #0e0f11; position: relative; min-height: 90px; }
+  .fader .cap { position: absolute; left: -11px; width: 30px; height: 14px; border-radius: 3px; background: linear-gradient(#d9dce0, #9aa0a8); bottom: 0; }
+  .side { display: flex; flex-direction: column; gap: 8px; }
+  .bottom { display: grid; grid-template-columns: repeat(11, minmax(70px, 1fr)); gap: 8px; margin-top: 12px; min-width: 900px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .panel h2 { font-size: 14px; margin: 0 0 10px; }
+  .panel h3 { font-size: 12px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+  .row > label:first-child { width: 120px; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0; }
+  .src { font-size: 12px; padding: 6px 8px; border-radius: 6px; background: var(--panel2); margin: 6px 0 10px; }
+  .src b { color: var(--accent); }
+  #monitor { font: 12px var(--mono); height: 220px; overflow: auto; background: #0f1113; border-radius: 8px; padding: 8px; color: #b9c0c8; white-space: pre; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; display: none; z-index: 10; }
+  .toast.show { display: block; }
+  .toast.err { border-color: var(--bad); color: var(--bad); }
+  .tb { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tb label { font-size: 12px; color: var(--muted); }
+  .tb input { width: 100%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SMC-Mixer Editor</h1>
+  <span class="status" id="status">not connected</span>
+  <span class="dirty" id="dirty"></span>
+  <span class="spacer"></span>
+  <button id="btnConnect" class="primary">Connect (USB)</button>
+  <button id="btnSim">Simulate</button>
+  <button id="btnReload" disabled>Reload</button>
+  <button id="btnSave" class="primary" disabled>Save to mixer</button>
+  <button id="btnExport" disabled>Export</button>
+  <label><button id="btnImport" disabled>Import</button><input type="file" id="fileImport" accept=".json,application/json" hidden></label>
+  <button id="btnFactory" class="danger" disabled>Factory reset</button>
+</header>
+<main>
+  <section>
+    <div class="bar">
+      <span class="label">Page</span>
+      <span class="seg" id="pages"></span>
+      <span class="label" style="margin-left:12px">Layer</span>
+      <span class="seg" id="layers"><button data-shift="0" class="on">Normal</button><button data-shift="1" class="shift">Shift held</button></span>
+    </div>
+    <div class="device">
+      <div class="surface" id="surface"></div>
+      <div class="bottom" id="bottom"></div>
+    </div>
+    <p class="hint">Click a control to edit it on the selected page and layer. <span style="color:var(--accent)">Orange</span>: mapped right here.
+      <span style="color:var(--accent2)">Blue</span>: inherited from a broader layer (all pages, or the normal layer).
+      Grey: what the base profile does. Resolution: page + Shift → page → all pages + Shift → all pages → base profile.</p>
+  </section>
+  <aside>
+    <div class="panel" id="editPanel"><h2>Control</h2><p class="hint">Select a control on the mixer drawing.</p></div>
+    <div class="panel" id="globalPanel"></div>
+    <div class="panel">
+      <h2>Monitor</h2>
+      <p style="margin:0 0 8px"><label><input type="checkbox" id="chkEvents"> highlight controls as you move them</label></p>
+      <div id="monitor"></div>
+    </div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+<script src="config.js"></script>
+<script src="device.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
