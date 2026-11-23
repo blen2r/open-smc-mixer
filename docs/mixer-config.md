@@ -1,15 +1,19 @@
 # SMC-Mixer: mapping model, config format and editor protocol (draft)
 
-Status: **draft**, 2026-11-22. Nothing here is implemented yet. Items marked **TBD** wait for the
-capture of the stock firmware's DAW mode (fw `SMC-Mixer_013`) or for the hardware map.
+Status: implemented, 2026-11-23, except where a section says "later" or **TBD**. The binary format
+is authoritative in `fw/smcpad/examples/mixer/mixer_config.h`; this document explains the model.
 
 ## Goal
 
 The stock firmware has two modes: **DAW mode** (fixed, Mackie-Control-style, not editable) and
-**CC mode** (every control remapped by hand in Midi Suite). Ours has one model in which **DAW mode is
-the base and anything can be overridden**, per page and per Shift layer:
+**CC mode** (every control remapped by hand in Midi Suite). Ours keeps the two modes (Shift + Left
+= DAW, Shift + Right = CC, DAW by default) and lets anything be overridden in either, per page and
+per Shift layer:
 
-- Controls that already do the right thing in DAW mode (Play, Stop, ...) need no configuration.
+- **DAW mode** sends what the stock DAW mode sends (table below) unless a DAW-mode mapping says
+  otherwise.
+- **CC mode** has a **profile** (which CCs the faders, knobs and strip buttons send, see "CC mode
+  profile") that a **template** sets for a device, plus CC-mode mappings on top.
 - **Pages:** 8 parameter pages; knobs and faders (and anything else) can map to something different
   on each page.
 - **Shift layer:** every control can send something else while Shift is held.
@@ -59,7 +63,9 @@ layer that defines the control**:
 2. page `p`, normal layer
 3. all pages, Shift layer (only when Shift is held)
 4. all pages, normal layer
-5. **DAW default** (what the stock DAW mode sends, see the table above)
+5. **the mode itself**: DAW mode's stock messages (the table above), or CC mode's profile
+
+Mappings belong to one mode (layer bit 5); the other mode does not see them.
 
 A mapping can also be **"disabled"** (send nothing), which is different from "not defined" (inherit).
 
@@ -70,13 +76,10 @@ are not surprised). Plain Rewind / FF and the arrows keep their DAW meaning unle
 
 ### Modes
 
-Shift + Left / Right selects the mode, like stock (the lit arrow shows which). Proposed set (TBD):
-
-- **custom**: DAW base + overrides, pages, Shift layer (the normal mode).
-- **plain DAW**: overrides ignored, exactly the stock DAW behaviour (useful to check whether an
-  issue comes from the config).
-
-Mode kept across power cycles; the change is shown with an LED pattern (TBD).
+Shift + Left = **DAW**, Shift + Right = **CC**, like stock: while Shift is held the arrow of the
+current mode is lit. The mode is a field of the stored configuration (`mode`), written when it
+changes, so it is kept across power cycles; the editor shows and sets it too (and on Save keeps a
+mode switched on the mixer since it was read). Factory default: DAW.
 
 ## Pages
 
@@ -116,7 +119,34 @@ the value, so you can see exactly when you've hit it (a blinking LED makes that 
 
 The page-change blink (above) uses the same LEDs and takes priority for its ~1 s.
 
-## OP-XY profile (the user's main use, 2026-11-22)
+## CC mode profile
+
+What CC mode does with a control nothing is mapped on (configuration fields `cc_*`, editor:
+Settings → CC mode profile). Strip *n* of page *p* = track / MIDI channel `track_base[p] + n`.
+
+| field | control | does |
+|---|---|---|
+| `cc_fader` | fader | this CC on the strip's channel |
+| `cc_fader_shift` | Shift + fader | this CC while Shift is held (none: as without Shift) |
+| `cc_mute` | Mute | toggles this CC 127 / 0; LED = muted (none: Mute sends nothing) |
+| `solo_mutes` | Solo | toggles solo by muting (`cc_mute`) the other tracks while any is soloed |
+| `cc_knob` | knob | this CC on the strip's channel (absolute, the mixer keeps the value) |
+| `cc_focus` | Rec / Select | knobs 1-4 / 5-8 send `cc_focus`..+3 of this strip's track; again: off (none: no focus) |
+| `special_modes` | Shift + Mute / Solo / Rec / Select | the fader's special modes (below) |
+| | transport, arrows | the stock DAW notes |
+
+`name` records the template the profile came from (28 ASCII characters); the editor clears it
+when the profile is edited by hand. The factory profile is the "OP-XY - blen2r" template's.
+
+### Templates
+
+`editor/templates/<name>.json` (shared) and `editor/templates/local/` (personal, git-ignored), each
+with a `<name>.md` describing the mapping; `host/templates_index.py` checks them and writes the
+`index.json` lists the editor reads. A template carries the profile, `pages`, `track_base`,
+`follow_incoming` and CC-mode mappings; applying one replaces exactly those (DAW mode and the
+personal settings stay). Names contain ` - <author>`. See `editor/templates/README.md`.
+
+## OP-XY (the template "OP-XY - blen2r", 2026-11-22)
 
 The mixer drives a Teenage Engineering OP-XY **over Bluetooth MIDI** (the OP-XY scans and connects:
 the mixer is the BLE peripheral, as the stock firmware); one MIDI channel per OP-XY
@@ -124,7 +154,8 @@ track (16). Official OP-XY CC table (guide section 23, "midi cc reference table"
 CC 7, track mute CC 9, track pan CC 10, all on channels 1-16; no solo CC. The user uses CC 12-15
 for a track's 4 parameters (the table itself lists "track parameters" as CC 46 -- to check).
 
-Strip *n* = OP-XY track / channel *n* (a second page could cover tracks 9-16).
+Strip *n* = OP-XY track / channel *n*; page 2 covers tracks 9-16. As a profile: `cc_fader` 7,
+`cc_fader_shift` 10, `cc_mute` 9, `solo_mutes`, `cc_knob` 12, `cc_focus` 12, `special_modes`.
 
 | control | does |
 |---|---|
@@ -229,25 +260,19 @@ overridden (useful in the Shift layer: "Shift + this knob = the DAW's pan").
 
 ## Storage on the device (sparse)
 
-Most controls inherit, so only overrides are stored: a header + a list of entries.
-
-```
-header   magic "SMXC", u16 version, u16 n_entries, u8 globals[...], u32 crc32
-entry    u8 control, u8 layer, u8 type, u8 channel, u8 number, u8 flags, u16 min, u16 max  (10 B)
-         layer: bits 0..3 page (0 = all pages, 1..8), bit 4 shift
-```
-
-62 controls x 18 layers would be ~11 KB if every slot were set; real configs are far smaller.
-Lives in its own flash sectors of our firmware's area (TBD with the layout of our bootloader/app on
-the Mixer), written double-buffered so a power cut never loses the config.
+Most controls inherit, so only overrides are stored: a 64-byte header (settings, CC profile,
+template name, CRC) + up to 240 entries of 10 bytes, in the VM (key 2, fixed size). Layout:
+`mixer_config.h`. Entry layer: bits 0..3 page (0 = all pages), bit 4 Shift, bit 5 DAW mode.
+Version 1 (32-byte header, `base` = DAW / OP-XY, key 1) is converted once on the first boot of a
+firmware that knows version 2: base OP-XY became CC mode with the OP-XY profile.
 
 ## Editor protocol (SysEx)
 
 **Implemented (2026-11-22)**, as below with these details: 8-bit data is sent 8-to-7 packed (one
 byte with the top bits of up to 7 bytes, then those bytes' low 7 bits); the binary layout of the
-configuration is in `fw/smcpad/examples/mixer/mixer_config.h` (header 32 bytes, entries 10 bytes,
-up to 240); `70` enters the bootloader, `71` returns echo diagnostics; `host/mixer_cfg.py` and the
-editor (`editor/`) speak it. Base profiles: `opxy` (default) and `daw`.
+configuration is in `fw/smcpad/examples/mixer/mixer_config.h` (version 2: header 64 bytes,
+entries 10 bytes, up to 240); hello also returns the current mode; `70` enters the bootloader, `71`
+returns echo diagnostics; `host/mixer_cfg.py` and the editor (`editor/`) speak it.
 
 Separate from the stock SINCO protocol. Manufacturer ID `7D` (non-commercial / educational),
 then a device byte and a command; 8-bit payloads 7-bit packed like SINCO (LSB first).
@@ -271,8 +296,10 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 
 - Static page in this repo (`editor/`), WebMIDI (Chrome / Edge / Chromium; SysEx permission).
 - Midi-Suite-like device drawing; click a control to edit it.
-- **Page selector 1..8 + "all pages"**, **Normal / Shift** toggle; every control shows where its
-  current value comes from (this layer / inherited from ... / DAW default).
+- **Mode bar DAW / CC**, **page selector 1..8 + "all pages"**, **Normal / Shift** toggle; every
+  control shows where its current value comes from (this layer / inherited from ... / the mode).
+- Settings: the mixer's mode, the CC profile, **Choose a template…** (search, favourites, the
+  template's `.md`), **Save as template…** (downloads the `.json` and a started `.md`).
 - Global settings (fader takeover, fader mismatch LED, page LED blink, knob acceleration: on / off
   and its curve, overridable per knob).
 - Live MIDI monitor, JSON import / export, a simulated device for working without the hardware.
@@ -280,5 +307,4 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 ## Open questions
 
 - Which LEDs sit above the faders; which LEDs the host can drive with MCU feedback.
-- Which modes Shift + Left / Right should select.
 - DAW banking with plain arrows in our firmware: reproduce the stock messages exactly (TBD).

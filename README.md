@@ -1,146 +1,164 @@
-<h1 align="center">open-smc-pad</h1>
+<h1 align="center">open-smc-mixer</h1>
 
-<p align="center"><b>Open firmware for the M-Vave SMC-PAD</b><br>
-a bootloader, an Arduino core and a step sequencer for a 16-pad MIDI controller</p>
-
-<p align="center"><img src="https://raw.githubusercontent.com/fedepaj/groovebox/main/docs/img/hero.gif" width="648" alt="GrooveBox running on the SMC-PAD"></p>
+<p align="center"><b>Open firmware for the M-Vave SMC-Mixer</b><br>
+DAW and CC modes, pages, a Shift layer, device templates and a web editor, for an 8-fader MIDI controller</p>
 
 <p align="center">
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
-<img src="https://img.shields.io/badge/chip-JieLi%20AC6966C%20(BR25)-555" alt="JieLi AC6966C">
-<img src="https://img.shields.io/badge/USB-MIDI%20%C2%B7%20CDC%20%C2%B7%20DFU-555" alt="USB">
+<img src="https://img.shields.io/badge/chip-JieLi%20AC636N%20(BR25)-555" alt="JieLi AC636N">
+<img src="https://img.shields.io/badge/USB-MIDI%20%C2%B7%20DFU-555" alt="USB">
 <img src="https://img.shields.io/badge/Bluetooth-BLE--MIDI-555" alt="BLE-MIDI">
 </p>
 
-The [M-Vave SMC-PAD](https://www.m-vave.com) is an inexpensive pad controller: 16 RGB
-velocity- and pressure-sensitive pads, 8 endless knobs, 10 buttons, USB-C, Bluetooth MIDI and a
-battery. Inside is a JieLi AC6966C, a Bluetooth audio chip that nobody writes firmware for.
+> **No maintenance, no support.** This is one person's firmware for their own SMC-Mixer, shared
+> as it is. Issues are off. Pull requests may be reviewed when there is time, which may be never;
+> pull requests that add [device templates](editor/templates/README.md) are the most welcome.
+> This is not meant to be the place for every SMC-Mixer firmware: fork it and make your own on
+> top of it, that is what it is for.
+>
+> Replacing your mixer's firmware is at your own risk. The way back to the stock firmware exists
+> but has only been tested in simulation (see [Back to stock](#back-to-stock)).
 
-This project replaces its firmware, completely and reversibly, with one you can read and change:
+It is a fork of [fedepaj/open-smc-pad](https://github.com/fedepaj/open-smc-pad), the open
+firmware for the SMC-PAD (same chip family), whose bootloader, runtime, USB and BLE work this is
+built on. The SMC-PAD parts are still in this tree, untouched; for them, see the original
+repository.
 
-- 🎛️ **[GrooveBox](https://github.com/fedepaj/groovebox)** — a 16-track step sequencer in the
-  spirit of the Digitakt and the BeatStep Pro: probability, conditions, ratchets, parameter
-  locks, live recording, euclidean patterns, pattern chains, MIDI clock in and out, and an
-  Ableton Live script that paints the pads with your Drum Rack.
-- 🧩 **[An Arduino core](arduino)** — write your own firmware as
-  an Arduino sketch: libraries for the pads, knobs and LEDs, USB-MIDI, BLE-MIDI, ArduinoBLE,
-  EEPROM; upload from the Arduino IDE.
-- 🎹 **The controller it was** — [SMCPadStock](arduino/sketches/SMCPadStock)
-  does what the factory firmware did (notes, CCs, Mackie Control, note repeat, aftertouch), as a
-  sketch you can tweak.
-- 🔌 **[A USB bootloader](fw)** — installed from the stock
-  firmware over USB, no tools inside the case; firmware updates by DFU from then on, and it
-  catches a crashing firmware so the pad can never be lost to a bad upload.
+## Features
 
-<table>
-<tr>
-<td><img src="docs/img/board-front.jpg" alt="The SMC-PAD board, front: the 16 pad sensors, encoders, shift registers"></td>
-<td><img src="docs/img/board-back.jpg" alt="The board, back"></td>
-</tr>
-<tr><td align="center"><sub>The board (SK12-V2.1): pad sensors with their RGB LEDs, the 8 encoders, two 74HC595 for the keys</sub></td>
-<td align="center"><sub>The back: power switch, USB-C and the 3.5 mm MIDI out, top right</sub></td></tr>
-</table>
+- **DAW mode**, the default: the stock firmware's Mackie Control layout (faders as pitch bend
+  with touch notes, knobs as V-Pots, buttons as notes, LEDs driven by the host).
+- **CC mode**: each strip is a track on its own MIDI channel. What the faders, knobs and strip
+  buttons send comes from a **profile** you set in the editor or load from a **template**:
+  - fader: a CC (volume), Shift + fader: another (pan);
+  - Mute toggles a CC; Solo mutes the other tracks (for devices without a solo CC);
+  - Rec / Select focus knobs 1-4 / 5-8 on four CCs of that track;
+  - Shift + Mute / Solo / Rec / Select turn a fader into mod wheel / pitch bend / pressure / pan.
+- **Shift + Left / Right** switch DAW / CC mode, as on the stock firmware (the lit arrow shows the
+  mode while Shift is held). The mode is kept across power cycles.
+- **Pages**: up to 8, Shift + Rewind / Fast-forward; each page says which tracks the strips are.
+- **Mappings** for any control: CC, note, program change, pitch bend, channel pressure or nothing;
+  per mode, per page or all pages, with or without Shift; buttons momentary, toggle or trigger;
+  value ranges.
+- **Faders**: jump or pickup (global, or per mapping); the LED above a fader stays lit while the
+  fader is not at its value and goes off when it gets there. Noise filtering so a resting fader
+  stays quiet.
+- **Knobs**: absolute values kept on the mixer, with acceleration you can tune or turn off.
+- **Values coming back** from the device (CC, pitch bend, pressure) update the mixer, without
+  feedback loops; optionally remembered across power cycles.
+- **Bluetooth MIDI** (the mixer is a BLE-MIDI peripheral, "SMC-Mixer") and USB-MIDI at once.
+- **Web editor** (Chrome): every setting and mapping, templates with search and favourites, a
+  live monitor of what the controls send.
+- **Updates over USB** from Linux in one command; a bootloader that catches a crashing firmware.
 
-## Install
+## Use
 
-<p align="center"><img src="docs/img/install.svg" width="900" alt="Stock firmware, installer, bootloader, your firmware"></p>
+### Install (once, from the stock firmware)
 
-On a pad with the factory firmware, with a USB cable, from macOS or Linux:
+Linux, a USB cable, and a source build (there are no release binaries). You need Docker and the
+JieLi toolchain, see [fw/README.md](fw/README.md#building); Python 3 with
+[uv](https://docs.astral.sh/uv/) (or `mido` and `python-rtmidi` installed); `dfu-util`.
 
 ```sh
-git clone --recursive https://github.com/fedepaj/open-smc-pad && cd open-smc-pad
-uv run --with mido --with python-rtmidi host/install_from_stock.py
+git clone --recursive https://github.com/blen2r/open-smc-pad && cd open-smc-pad
+
+BOARD=mixer fw/boot/build.sh                                        # bootloader + installer
+BOARD=mixer host/package_fw.sh bootonly
+BOARD=mixer SMCPAD_TINYUSB=1 TEXT_BASE=0x1E08120 fw/build.sh        # the mixer firmware
+BOARD=mixer host/package_fw.sh mixerapp                             # -> work/flash/mixer/mixer_area.bin
+
+uv run --with mido --with python-rtmidi host/install_from_stock.py --board mixer \
+    --app work/flash/mixer/mixer_area.bin
 ```
 
-The script talks to the stock firmware over USB-MIDI (the same channel the M-Vave app uses),
-writes a small installer and the bootloader into free flash, and asks you to switch the pad off
-and on once. The installer then puts the bootloader in place of the factory firmware and the
-script uploads a first firmware. Every byte is read back before anything is switched over; if
-something does not check out, the stock firmware simply boots again.
+The script talks to the stock firmware over USB-MIDI, writes an installer and the bootloader
+into free flash (every byte read back), and asks you to switch the mixer off and on once. The
+installer replaces the stock firmware with the bootloader, which comes up as a USB DFU device;
+the script then writes the firmware. If anything does not check out, the stock firmware simply
+boots again. [docs/bootloader.md](docs/bootloader.md) has the whole story. (At the very end the
+script may say the application did not come back: its check is macOS-only. Look for
+"SMC-Mixer open fw" in `amidi -l`.)
 
-Afterwards any firmware goes on over USB: from the Arduino IDE, or `dfu-util -d 1209:0002 -a 0 -D
-firmware.bin` with the pad in its bootloader (hold **SHIFT + PLAY** while switching it on).
+So that `dfu-util` can reach the bootloader without sudo, add a udev rule once:
 
-### The Arduino core
-
-In the Arduino IDE, *Settings → Additional boards manager URLs*:
-
-```
-https://github.com/fedepaj/open-smc-pad/releases/latest/download/package_smcpad_index.json
+```sh
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0002", TAG+="uaccess"' |
+    sudo tee /etc/udev/rules.d/50-smc-mixer-dfu.rules && sudo udevadm control --reload
 ```
 
-then install **SMC-PAD (open firmware)** from the Boards Manager (macOS, Linux and Windows; it
-fetches the JieLi compiler from JieLi). More in [arduino/README.md](arduino/README.md#install).
+### Update
 
-> **Status:** works end to end on the author's pad. The first release will ship the ready-made
-> install package (until then `install_from_stock.py` needs the files from a source build, see
-> [fw/README.md](fw/README.md#building)). To go back to the
-> factory firmware you need the recovery path below — keep that in mind.
+```sh
+BOARD=mixer SMCPAD_TINYUSB=1 TEXT_BASE=0x1E08120 fw/build.sh && BOARD=mixer host/package_fw.sh mixerapp
+host/mixer_update.sh
+```
 
-**Recovery.** The bootloader goes to DFU by itself after a firmware crashes four times at start,
-and it updates itself through a staging area, so a cut power never leaves the pad without one.
-The last resort, the chip's ROM download mode, needs a Raspberry Pi Pico on the USB data lines
-([`hw/jl-usbkey`](hw/jl-usbkey), [docs/flash-layout.md](docs/flash-layout.md)) — it is also how the
-factory firmware can be written back.
+`package_fw.sh` only packages what `fw/build.sh` compiled: run both. `mixer_update.sh` asks the
+running firmware into the bootloader (a SysEx message), writes the firmware and waits for it to
+come back. Your settings stay. By hand: hold **Shift + Bluetooth + Play** for 2 s, or switch the
+mixer on holding **Shift + Play**, then `dfu-util -d 1209:0002 -a 0 -D work/flash/mixer/mixer_area.bin`.
 
-## How it fits together
+### The editor
 
-<p align="center"><img src="docs/img/architecture.svg" width="900" alt="Sketches on the Arduino core, on our runtime, on the JieLi SDK, behind the bootloader"></p>
+```sh
+host/mixer_editor.sh
+```
 
-<p align="center"><img src="docs/img/flash-map.svg" width="900" alt="Flash layout"></p>
+serves the editor on `http://localhost:8770` and opens it in Chrome (Web MIDI needs Chrome,
+Edge or Chromium). **Connect (USB)** reads the mixer's configuration; change things, then **Save
+to mixer**. **Simulate** works without a mixer. [editor/README.md](editor/README.md) explains it.
+
+### Templates
+
+A template is CC mode set up for one device, by one person: `OP-XY - blen2r` is the one this
+firmware was made for (the Teenage Engineering OP-XY over Bluetooth). In the editor: Settings →
+**Choose a template…**. Each template comes with a page saying how it is mapped
+([editor/templates/opxy-blen2r.md](editor/templates/opxy-blen2r.md)).
+
+To make your own: set CC mode up in the editor, **Save as template…**, write its `.md`, drop both
+in `editor/templates/local/` (yours, ignored by git) or `editor/templates/` (to share by pull
+request). [editor/templates/README.md](editor/templates/README.md) has the steps and the naming
+rule.
+
+### Back to stock
+
+The bootloader accepts a package that puts the stock firmware back
+([host/bootpkg.py](host/bootpkg.py) `--to-stock`, built from the vendor's `.fwsc` and a dump of
+your mixer's first VM sector). It has been checked byte for byte in simulation
+(`host/mixer_install_sim.py`) but **not yet run on a mixer**.
+
+## Hacking on it
+
+- **[QA.md](QA.md)**: how to check a change on the hardware before you publish it (a guided
+  script does most of it). Please do, before you share a firmware.
+- **[CLAUDE.md](CLAUDE.md)**: the orientation for coding agents (and people): where things are,
+  how to build, test and keep QA.md current.
+- [docs/mixer-config.md](docs/mixer-config.md): modes, profile, mappings, the configuration
+  format and the editor's SysEx protocol.
+- [docs/mixer-hardware.md](docs/mixer-hardware.md): every pin, key and LED of the mixer.
 
 | | |
 |---|---|
-| [`fw/`](fw) | the bootloader, the runtime and drivers under the Arduino core |
-| [`arduino/`](arduino) | the Arduino core (Boards Manager package built by CI), libraries, SMCPadStock, the self-test, the emulator |
-| [`host/`](host) | install from stock, DFU, flashing in ROM mode, MIDI monitor, the core's self-test runner |
-| [`docs/`](docs) | everything learned about the pad, and the decisions |
-| [`hw/jl-usbkey`](hw/jl-usbkey) | the Raspberry Pi Pico recovery sketch (ROM download mode) |
-| [`re/`](re) | reverse engineering scripts and captures |
-| [**groovebox**](https://github.com/fedepaj/groovebox) | **its own repository**: the sequencer, its guide and the Ableton Live script |
-
-Clone with `--recursive`: the JieLi SDK, TinyUSB, ArduinoCore-API and the JieLi tools by
-kagaimiq come in as submodules.
-
-## Documentation
-
-| | |
-|---|---|
-| [hardware.md](docs/hardware.md) | every pin: pads (4051 muxes into the ADC), key matrix (595s), button LED multiplex, RGB chain, power; calibration |
-| [bootloader.md](docs/bootloader.md) | the bootloader, DFU, self-update, crash recovery, installing from stock, pitfalls |
-| [flash-layout.md](docs/flash-layout.md) | the flash, JLFS directories, the SFC encryption, boot selection, ROM download mode |
-| [usb-br25.md](docs/usb-br25.md) | the BR25 USB controller as our TinyUSB driver uses it |
-| [sinco-protocol.md](docs/sinco-protocol.md) | the stock firmware's SysEx protocol (what the M-Vave app speaks) |
-| [bluetooth.md](docs/bluetooth.md) | BLE-MIDI, the GATT runtime, why the address depends on the services |
-| [stock-behaviour.md](docs/stock-behaviour.md) | what the factory firmware does, from its manual and its presets |
-| [gaps.md](docs/gaps.md) | what is not known or not done yet |
-
-Decisions and the reasons behind them live next to the code they concern: in comments, and in
-these documents' "why" and "pitfalls" sections.
-
-## Status
-
-Working: bootloader (install from stock, DFU, self-update, crash recovery), all the controls
-(pads with velocity and pressure, knobs, buttons, all LEDs), USB-MIDI, USB serial, BLE-MIDI and
-custom BLE services, the Arduino core (71 self-tests on the device), GrooveBox, SMCPadStock, the
-Ableton script.
-
-Not yet: the 3.5 mm MIDI OUT, a Boards Manager package, release binaries, Windows hosts, a
-browser editor. See [gaps.md](docs/gaps.md).
+| [`fw/smcpad/examples/mixer/`](fw/smcpad/examples/mixer) | the mixer firmware: modes, mappings, MIDI, BLE-MIDI, configuration |
+| [`fw/smcpad/arduino/smcmixer_hw.c`](fw/smcpad/arduino/smcmixer_hw.c) | the mixer's hardware: key matrix, LEDs, encoders, faders |
+| [`fw/boot/`](fw/boot) | the bootloader and the installer (`BOARD=mixer`) |
+| [`editor/`](editor) | the web editor and its templates |
+| [`host/`](host) | install, update, the editor server, the QA script, configuration CLI |
 
 ## Credits
 
-- [kagaimiq](https://github.com/kagaimiq) — jl-uboot-tool, jielie, ghidra-jieli and the
+- [fedepaj/open-smc-pad](https://github.com/fedepaj/open-smc-pad) by Federico Paglioni and its
+  contributors: the bootloader, the install-from-stock path, the runtime, the USB and BLE work
+  this firmware stands on.
+- [kagaimiq](https://github.com/kagaimiq): jl-uboot-tool, jielie, ghidra-jieli and the
   documentation that made the JieLi chips approachable.
-- [JieLi](https://github.com/Jieli-Tech) — the AC63 SDK (Apache 2.0).
-- [TinyUSB](https://github.com/hathach/tinyusb), [ArduinoCore-API](https://github.com/arduino/ArduinoCore-API),
-  [blink](https://github.com/jart/blink).
+- [JieLi](https://github.com/Jieli-Tech): the AC63 SDK (Apache 2.0).
+- [TinyUSB](https://github.com/hathach/tinyusb).
 
-Not affiliated with M-Vave or JieLi. "SMC-PAD" and "M-Vave" are names of their owners, used here
-to say what this firmware runs on. Opening your pad and replacing its firmware is at your own
-risk.
+Not affiliated with M-Vave, JieLi or Teenage Engineering. "SMC-Mixer", "M-Vave" and "OP-XY" are
+names of their owners, used here to say what this firmware runs on and talks to.
 
 ## License
 
-MIT — [LICENSE](LICENSE). Parts derived from the JieLi SDK are Apache 2.0
+MIT, [LICENSE](LICENSE). Parts derived from the JieLi SDK are Apache 2.0
 ([fw/NOTICE](fw/NOTICE)).
