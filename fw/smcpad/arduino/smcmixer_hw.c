@@ -263,12 +263,21 @@ uint64_t smcmixer_matrix_raw(void)
 
 /* ------------------------------------------------------------------ faders (ADC chain) */
 
-#define FADER_HYST      10                  /* raw counts before a move is reported: a resting
-                                             * fader wobbles a few counts when another moves */
+/* A fader reports a move past a threshold that depends on what it is doing: a resting fader
+ * wobbles (fader 2 by up to ~16 counts peak to peak, more when the case is knocked or another
+ * fader moves), so starting to move, or turning back, takes FADER_START counts; a fader already
+ * moving that way reports every FADER_STEP counts, about one 7-bit value. "Moving": it reported
+ * within FADER_REST_TICKS. A wobble is a string of reversals, so it stays under FADER_START. */
+#define FADER_STEP          8
+#define FADER_START         24
+#define FADER_END           10              /* within this of an end: snap to it */
+#define FADER_REST_TICKS    1200            /* 300 ms of TIMER3 ticks */
 
-static volatile u16 fader_avg[SMCMIXER_NUM_FADERS];     /* x 4 */
+static volatile u16 fader_avg[SMCMIXER_NUM_FADERS];     /* x 8 */
 static u16 fader_sent[SMCMIXER_NUM_FADERS];
 static u8 fader_init[SMCMIXER_NUM_FADERS];
+static s8 fader_dir[SMCMIXER_NUM_FADERS];
+static u32 fader_at[SMCMIXER_NUM_FADERS];
 static u8 adc_pos;
 static volatile u32 adc_rounds;
 
@@ -286,32 +295,45 @@ static void adc_start(u32 f)
 
 static void fader_sample(u32 f, u32 v)
 {
-    u32 avg;
+    u32 avg, thr, r;
+    int d;
+    s8 dir;
 
     if (!fader_init[f]) {
         fader_init[f] = 1;
-        fader_avg[f] = (u16)(v * 4);
+        fader_avg[f] = (u16)(v * 8);
         fader_sent[f] = (u16)v;
+        fader_at[f] = hw_ticks - FADER_REST_TICKS;
         ev_push(SMCMIXER_EV_FADER, (u8)f, (s16)v);
         return;
     }
-    avg = fader_avg[f] - fader_avg[f] / 4 + v;      /* IIR, 1/4 */
+    avg = fader_avg[f] - fader_avg[f] / 8 + v;      /* IIR, 1/8 */
     fader_avg[f] = (u16)avg;
-    avg /= 4;
-    /* report a move past the hysteresis; within FADER_HYST of an end it snaps to the end, so
-     * 0 and 1023 are reachable and a fader resting there stays put */
-    if ((avg > fader_sent[f] + FADER_HYST) || (avg + FADER_HYST < fader_sent[f]) ||
-        (avg <= FADER_HYST && fader_sent[f] != 0) || (avg >= 1023 - FADER_HYST && fader_sent[f] != 1023)) {
-        u32 r = avg <= FADER_HYST ? 0 : avg >= 1023 - FADER_HYST ? 1023 : avg;
-
-        fader_sent[f] = (u16)r;
-        ev_push(SMCMIXER_EV_FADER, (u8)f, (s16)r);
+    avg /= 8;
+    d = (int)avg - (int)fader_sent[f];
+    dir = d > 0 ? 1 : -1;
+    thr = (dir == fader_dir[f] && hw_ticks - fader_at[f] < FADER_REST_TICKS) ? FADER_STEP : FADER_START;
+    if (avg <= FADER_END) {
+        r = 0;                              /* the ends are reachable, and a fader there stays */
+    } else if (avg >= 1023 - FADER_END) {
+        r = 1023;
+    } else if ((u32)(d < 0 ? -d : d) > thr) {
+        r = avg;
+    } else {
+        return;
     }
+    if (r == fader_sent[f]) {
+        return;
+    }
+    fader_dir[f] = r > fader_sent[f] ? 1 : -1;
+    fader_at[f] = hw_ticks;
+    fader_sent[f] = (u16)r;
+    ev_push(SMCMIXER_EV_FADER, (u8)f, (s16)r);
 }
 
 uint16_t smcmixer_fader(int f)
 {
-    return f >= 0 && f < SMCMIXER_NUM_FADERS ? fader_avg[f] / 4 : 0;
+    return f >= 0 && f < SMCMIXER_NUM_FADERS ? fader_avg[f] / 8 : 0;
 }
 
 /* Power, as on the pad: every 64 rounds the bandgap reference and VBAT / 4. */

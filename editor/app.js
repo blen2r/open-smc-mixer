@@ -263,6 +263,8 @@ function monitor(line) {
   if (atBottom) m.scrollTop = m.scrollHeight;
 }
 
+$('#btnClearMon').onclick = () => { $('#monitor').textContent = ''; };
+
 function describeMidi(b) {
   const t = b[0] & 0xF0, ch = (b[0] & 15) + 1;
   switch (t) {

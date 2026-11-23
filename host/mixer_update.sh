@@ -26,7 +26,15 @@ if ! in_dfu; then
     amidi -l >/dev/null 2>&1
     hw="$(amidi -l | awk '/SMC-Mixer open fw/ {print $2; exit}')"
     [ -n "$hw" ] || die "no amidi port for the firmware"
-    amidi -p "$hw" -S "F0 7D 4D 70 F7"
+    if ! amidi -p "$hw" -S "F0 7D 4D 70 F7" 2>/dev/null; then
+        # the raw port is held (the web editor in Chrome, mixer_qa.py): go through the ALSA
+        # sequencer instead, which shares it
+        echo "   (raw port busy, sending through the ALSA sequencer)"
+        py="${MIXER_PY:-$HOME/smc_mixer/fw_work/.venv/bin/python}"
+        [ -x "$py" ] || py=python3
+        "$py" -c 'import mido; n = next(n for n in mido.get_output_names() if "SMC-Mixer open fw" in n)
+mido.open_output(n).send(mido.Message("sysex", data=[0x7D, 0x4D, 0x70]))' 2>&1 | grep -v MidiIn
+    fi
     wait_for in_dfu 15 || die "the bootloader did not show up"
 fi
 echo "== writing $(basename "$IMAGE")"
