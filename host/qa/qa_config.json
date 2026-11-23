@@ -13,10 +13,11 @@
  "cc_fader": 7,
  "cc_fader_shift": 10,
  "cc_mute": 9,
- "cc_knob": 12,
- "cc_focus": 12,
+ "cc_encoder": 12,
  "solo_mutes": true,
  "special_modes": true,
+ "focus_rec": [null, null, 60, null, null, 61, 62, null],
+ "focus_select": [null, null, null, null, null, null, null, null],
  "mappings": [
   {"mode": "cc", "control": 0, "page": 0, "shift": false, "type": "cc", "channel": 2, "number": 20, "flags": 0, "min": 0, "max": 127},
   {"mode": "cc", "control": 1, "page": 0, "shift": false, "type": "cc", "channel": 2, "number": 21, "flags": 0, "min": 40, "max": 50},

@@ -64,7 +64,7 @@ function buildSurface() {
   for (let s = 0; s < 8; s++) {
     const strip = document.createElement('div');
     strip.className = 'strip';
-    strip.appendChild(ctlEl(s, 'knob'));
+    strip.appendChild(ctlEl(s, 'encoder'));
     const led = document.createElement('div');
     led.className = 'led';
     led.id = `led${s}`;
@@ -172,7 +172,7 @@ function renderEditor() {
       const t = m.flags & CFG.TAKEOVER_MASK;
       html += field('Takeover', `<select id="eTk"><option value="0" ${t === 0 ? 'selected' : ''}>global (${state.cfg.fader_takeover})</option><option value="4" ${t === 4 ? 'selected' : ''}>jump</option><option value="8" ${t === 8 ? 'selected' : ''}>pickup</option></select>`);
     }
-    if (c.kind === 'knob') {
+    if (c.kind === 'encoder') {
       const a = m.flags & CFG.ACCEL_MASK;
       html += field('Acceleration', `<select id="eAc"><option value="0" ${a === 0 ? 'selected' : ''}>global (${state.cfg.accel ? 'on' : 'off'})</option><option value="16" ${a === 16 ? 'selected' : ''}>off</option><option value="32" ${a === 32 ? 'selected' : ''}>on</option></select>`);
     }
@@ -232,11 +232,16 @@ function renderGlobals() {
   html += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true) + '<span class="hint">empty: as without Shift</span>');
   html += field('Mute CC', ccIn('gCcM', g.cc_mute, true) + '<span class="hint">toggles 127 / 0; empty: Mute sends nothing</span>');
   html += field('Solo', `<label><input type="checkbox" id="gSolo" ${g.solo_mutes ? 'checked' : ''}> mutes the other tracks</label>`);
-  html += field('Knob CC', ccIn('gCcK', g.cc_knob));
-  html += field('Focus CCs', ccIn('gCcFo', g.cc_focus, true) + '<span class="hint">Rec / Select: knobs 1-4 / 5-8 send this CC and the 3 next of that track; empty: off</span>');
+  html += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true) + '<span class="hint">empty: encoders send nothing (unless focused)</span>');
+  const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
+    `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
+  html += '<h3>Focus groups</h3><p class="hint">Rec (or Select) on a strip makes the encoders below send these CCs on that strip\'s track; again: off. An empty box leaves that encoder as it is. All empty: the button does nothing. If both groups use the same encoder, turning one on blinks both buttons and turns the other off.</p>';
+  html += field('Rec', focusRow('focus_rec', 'gFoR'));
+  html += field('Select', focusRow('focus_select', 'gFoS'));
+  if (focusOverlap(g)) html += '<p class="hint">These groups overlap (same encoder in both): only one can be on at a time.</p>';
   html += field('Special modes', `<label><input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}> Shift + Mute / Solo / Rec / Select: fader = mod wheel / pitch bend / pressure / pan</label>`);
   html += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`);
-  html += '<h3>Track of strip 1, per page</h3><div class="tb">' +
+  html += '<h3>Track of strip 1, per page</h3><p class="hint">Strip 1 of a page is this track; strips 2-8 are the next ones (after 16: 1 again). The track is the MIDI channel of the strip\'s fader, encoder and buttons. To send one control elsewhere, map it.</p><div class="tb">' +
     g.track_base.map((t, i) => `<label>page ${i + 1}<input type="number" class="gTb" data-i="${i}" min="1" max="16" value="${t + 1}"></label>`).join('') + '</div>';
   html += '<h3>Faders</h3>';
   html += field('Takeover', `<select id="gTk">${opt('pickup', g.fader_takeover, 'pickup')}${opt('jump', g.fader_takeover, 'jump')}</select>`);
@@ -244,7 +249,7 @@ function renderGlobals() {
   html += '<h3>Values</h3>';
   html += field('Follow incoming', `<input type="checkbox" id="gFollow" ${g.follow_incoming ? 'checked' : ''}><span class="hint">CC / pitch bend / pressure received set the known value</span>`);
   html += field('Remember', `<input type="checkbox" id="gRemember" ${g.remember_values ? 'checked' : ''}><span class="hint">across power cycles</span>`);
-  html += '<h3>Knob acceleration</h3>';
+  html += '<h3>Encoder acceleration</h3>';
   html += field('Acceleration', `<input type="checkbox" id="gAccel" ${g.accel ? 'checked' : ''}>`);
   html += field('x3 under', `<input type="number" id="gA3" min="1" max="100" value="${g.accel_ms_x3}"> ms between steps`);
   html += field('x2 under', `<input type="number" id="gA2" min="1" max="100" value="${g.accel_ms_x2}"> ms`);
@@ -257,8 +262,10 @@ function renderGlobals() {
     g.cc_fader_shift = cc('#gCcFS', true);
     g.cc_mute = cc('#gCcM', true);
     g.solo_mutes = $('#gSolo').checked;
-    g.cc_knob = cc('#gCcK');
-    g.cc_focus = cc('#gCcFo', true);
+    g.cc_encoder = cc('#gCcK', true);
+    const box = el => { const v = el.value.trim(); return v === '' ? null : Math.max(0, Math.min(127, +v || 0)); };
+    document.querySelectorAll('.gFoR').forEach(el => { g.focus_rec[+el.dataset.k] = box(el); });
+    document.querySelectorAll('.gFoS').forEach(el => { g.focus_select[+el.dataset.k] = box(el); });
     g.special_modes = $('#gSpecial').checked;
     g.pages = Math.max(1, Math.min(8, +$('#gPages').value || 1));
     document.querySelectorAll('.gTb').forEach(el => { g.track_base[+el.dataset.i] = Math.max(1, Math.min(16, +el.value || 1)) - 1; });
@@ -367,6 +374,10 @@ function download(name, text, type) {
 }
 
 // A description of a template's mapping, to start its .md from
+function focusDoc(g) {
+  const used = g.map((v, k) => (v === null ? null : `encoder ${k + 1} → CC ${v}`)).filter(Boolean);
+  return used.length ? `focus on that track (again: off): ${used.join(', ')}` : 'nothing';
+}
 function templateDoc(t) {
   const s = t.settings;
   const cc = v => (v === null ? '—' : `CC ${v}`);
@@ -374,10 +385,11 @@ function templateDoc(t) {
     '## CC mode', '', '| control | sends |', '|---|---|',
     `| fader | ${cc(s.cc_fader)} on the strip's channel |`,
     `| Shift + fader | ${s.cc_fader_shift === null ? 'as without Shift' : cc(s.cc_fader_shift)} |`,
-    `| knob | ${cc(s.cc_knob)} on the strip's channel |`,
+    `| encoder | ${cc(s.cc_encoder)} on the strip's channel |`,
     `| Mute | ${s.cc_mute === null ? 'nothing' : `toggles ${cc(s.cc_mute)} 127 / 0`} |`,
     `| Solo | ${s.solo_mutes && s.cc_mute !== null ? 'mutes the other tracks' : 'nothing'} |`,
-    `| Rec / Select | ${s.cc_focus === null ? 'nothing' : `knobs 1-4 / 5-8 send CC ${s.cc_focus}-${s.cc_focus + 3} of that track`} |`,
+    `| Rec | ${focusDoc(s.focus_rec)} |`,
+    `| Select | ${focusDoc(s.focus_select)} |`,
     `| Shift + Mute / Solo / Rec / Select | ${s.special_modes ? 'fader special modes: mod wheel / pitch bend / pressure / pan' : 'as without Shift'} |`,
     '', `Pages: ${s.pages}; strip 1 is track ${s.track_base.slice(0, s.pages).map(x => x + 1).join(' / ')} on page ${[...Array(s.pages).keys()].map(x => x + 1).join(' / ')}.`, ''];
   if (t.mappings.length) {
@@ -454,7 +466,7 @@ function onEvent(control, value, page, shift) {
     if (cap) cap.style.bottom = `calc(${(value / 1023) * 100}% - ${(value / 1023) * 14}px)`;
   }
   const c = CONTROLS[control];
-  const v = c.kind === 'knob' ? (value > 32767 ? value - 65536 : value) : value;
+  const v = c.kind === 'encoder' ? (value > 32767 ? value - 65536 : value) : value;
   monitor(`▸ ${c ? c.name : control}  ${c.kind === 'button' ? (v ? 'down' : 'up') : v}  (page ${page}${shift ? ', Shift' : ''})`);
 }
 

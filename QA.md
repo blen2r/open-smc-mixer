@@ -33,14 +33,16 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
 
 1. It backs your configuration up to `work/qa_backup_<time>.json` (restored at the end; on a rerun
    it finds your last real backup instead of backing up its own test configuration).
-2. **Editor round trip.** You import `host/qa/qa_config.json` in the editor, make five listed
+2. **Editor round trip.** You import `host/qa/qa_config.json` in the editor, make six listed
    changes (in both modes), save; the script reads the configuration back and compares it with
    what it should be.
-3. **36 hardware checks.** One action at a time ("turn knob 2 a lot to the right"); the script
+3. **45 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script
    checks every MIDI message the mixer sends on USB, and knows which control you touched and on
    which page (wrong control, wrong page and stray messages are reported as such). A few ask
    yes / no about an LED. Covered:
-   - knobs: CC, value ranges, program change, pitch bend, disabled, the CC profile's knob CC;
+   - encoders: CC, value ranges, program change, pitch bend, disabled, the CC profile's encoder CC;
+   - focus groups: Rec focus on chosen encoders, an empty slot left alone, Select sharing an
+     encoder (both buttons blink, Rec goes off), focus off;
    - faders: CC, pressure, Shift layer, pickup with the LED, page-only mappings and ranges;
    - buttons: toggle, momentary, trigger, program change, base explicitly, mappings removed and
      added in the editor, the profile's mute;

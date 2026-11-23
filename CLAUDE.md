@@ -11,7 +11,7 @@ their device in plain words, and walk them through checking it (see "QA duty").
 
 | path | what |
 |---|---|
-| `fw/smcpad/examples/mixer/mixer_app.c` | the firmware's behaviour: modes, CC profile, mappings, faders, knobs, buttons, LEDs, MIDI in |
+| `fw/smcpad/examples/mixer/mixer_app.c` | the firmware's behaviour: modes, CC profile, mappings, faders, encoders, focus groups, buttons, LEDs, MIDI in |
 | `fw/smcpad/examples/mixer/mixer_config.{h,c}` | the configuration: binary format (header comment), storage in the VM, resolution, the editor's SysEx protocol |
 | `fw/smcpad/examples/mixer/mixer_blemidi.c` | BLE-MIDI peripheral |
 | `fw/smcpad/arduino/smcmixer_hw.{h,c}` | hardware: 74HC595 key/LED matrix, encoders, fader ADC + noise filter, timebase |

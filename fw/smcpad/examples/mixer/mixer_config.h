@@ -2,12 +2,12 @@
  * SMC-Mixer configuration: the model of docs/mixer-config.md, stored in the VM and edited over
  * USB-MIDI SysEx by the web editor (editor/).
  *
- * Binary layout, version 2 (little endian; the editor builds and parses the same bytes,
+ * Binary layout, version 3 (little endian; the editor builds and parses the same bytes,
  * editor/config.js):
  *
- *   header, 64 bytes
+ *   header, 80 bytes
  *     0  "SMXC"                magic
- *     4  u16 version           2
+ *     4  u16 version           3
  *     6  u16 n_entries
  *     8  u8  mode              0 = DAW (stock DAW mode, Mackie), 1 = CC. The mode the mixer is in:
  *                              Shift + Left / Right change it and store it.
@@ -16,7 +16,7 @@
  *    11  u8  follow_incoming   0 / 1: incoming CC / pitch bend / pressure set the known value
  *    12  u8  remember_values   0 / 1: known values kept across power cycles
  *    13  u8  accel             0 = off, 1 = on
- *    14  u8  accel_ms_x3       knob steps closer than this (ms) count x3
+ *    14  u8  accel_ms_x3       encoder steps closer than this (ms) count x3
  *    15  u8  accel_ms_x2       ... x2
  *    16  u8  pages             1..8
  *    17  u8  track_base[8]     per page: strip s controls track / channel track_base + s
@@ -24,15 +24,18 @@
  *    25  u8  cc_fader          fader: this CC on the strip's channel
  *    26  u8  cc_fader_shift    Shift + fader: this CC (MCFG_NONE: the same as without Shift)
  *    27  u8  cc_mute           Mute buttons toggle this CC 127 / 0 (MCFG_NONE: they send nothing)
- *    28  u8  cc_knob           knob: this CC on its strip's channel
- *    29  u8  cc_focus          Rec / Select: knobs 1-4 / 5-8 send cc_focus..+3 of that strip's
- *                              channel (MCFG_NONE: no focus groups, Rec / Select send nothing)
+ *    28  u8  cc_encoder        encoder: this CC on its strip's channel (MCFG_NONE: nothing)
+ *    29  u8  reserved          (version 2: cc_focus, see focus below)
  *    30  u8  cc_flags          MCC_SOLO_MUTES: Solo mutes the other tracks (with cc_mute);
  *                              MCC_SPECIAL: Shift + Mute / Solo / Rec / Select = fader modes
  *    31  u8  reserved
  *    32  char name[28]         the template the profile came from ("OP-XY - blen2r"), NUL padded
- *    60  u32 crc32             (zlib) over the header with this field 0, then the entries
- *   entries, 10 bytes each, at 64
+ *    60  u8  focus[2][8]       the focus groups, [0] = Rec, [1] = Select: Rec on a strip makes
+ *                              encoder k send CC focus[0][k] on that strip's channel, for every k
+ *                              that is not MCFG_NONE (the others stay as they are); again: off.
+ *                              A group of only MCFG_NONE: the button sends nothing.
+ *    76  u32 crc32             (zlib) over the header with this field 0, then the entries
+ *   entries, 10 bytes each, at 80
  *     0  u8  control           MCTL_* below
  *     1  u8  layer             bits 0..3 page (0 = all pages, 1..8), bit 4 = Shift layer,
  *                              bit 5 = DAW mode (0: the mapping is for CC mode)
@@ -44,7 +47,8 @@
  *     7  u8  max               value sent for "on" / the high end
  *     8  u8  reserved[2]
  *
- * Version 1 (32-byte header, base instead of mode, no CC profile) is read once and converted.
+ * Version 2 (64-byte header: cc_focus at 29, one CC for both groups, no focus[], crc32 at 60, up to
+ * 240 entries) is read once and converted. Both are stored as MCFG_MAX_BYTES under the same key.
  */
 #ifndef MIXER_CONFIG_H
 #define MIXER_CONFIG_H
@@ -52,11 +56,11 @@
 #include <stdint.h>
 
 #define MCFG_MAGIC          0x43584D53u     /* "SMXC" little endian */
-#define MCFG_VERSION        2
-#define MCFG_HEADER         64
+#define MCFG_VERSION        3
+#define MCFG_HEADER         80
 #define MCFG_ENTRY          10
-#define MCFG_MAX_ENTRIES    240
-#define MCFG_MAX_BYTES      (MCFG_HEADER + MCFG_MAX_ENTRIES * MCFG_ENTRY)
+#define MCFG_MAX_ENTRIES    238
+#define MCFG_MAX_BYTES      2464            /* stored size, as version 2: header + entries fit */
 #define MCFG_PAGES          8
 #define MCFG_LAYERS         ((MCFG_PAGES + 1) * 2 * 2)  /* (all pages + 8) x (normal, shift) x mode */
 #define MCFG_LAYER_SHIFT    0x10
@@ -67,7 +71,7 @@
 #define MCFG_NAME_LEN       28
 
 /* controls */
-#define MCTL_KNOB(k)        (k)             /* 0..7 */
+#define MCTL_KNOB(k)        (k)             /* 0..7, the encoders */
 #define MCTL_FADER(f)       (8 + (f))       /* 8..15 */
 #define MCTL_BUTTON(b)      (16 + (b))      /* 16..60, buttons in smcmixer_hw.h order */
 #define MCTL_COUNT          61
@@ -91,7 +95,7 @@ enum {
 #define MF_TAKEOVER_INHERIT 0x00
 #define MF_TAKEOVER_JUMP    0x04
 #define MF_TAKEOVER_PICKUP  0x08
-#define MF_ACCEL_MASK       0x30            /* knobs: */
+#define MF_ACCEL_MASK       0x30            /* encoders: */
 #define MF_ACCEL_INHERIT    0x00
 #define MF_ACCEL_OFF        0x10
 #define MF_ACCEL_ON         0x20
@@ -108,8 +112,9 @@ typedef struct {
     uint8_t mode, fader_takeover, fader_led, follow_incoming, remember_values;
     uint8_t accel, accel_ms_x3, accel_ms_x2, pages;
     uint8_t track_base[MCFG_PAGES];
-    uint8_t cc_fader, cc_fader_shift, cc_mute, cc_knob, cc_focus, cc_flags, rsv;
+    uint8_t cc_fader, cc_fader_shift, cc_mute, cc_encoder, rsv0, cc_flags, rsv1;
     char name[MCFG_NAME_LEN];
+    uint8_t focus[2][8];                    /* [0] = Rec, [1] = Select */
     uint32_t crc32;
 } __attribute__((packed)) mcfg_header_t;
 

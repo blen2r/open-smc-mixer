@@ -13,14 +13,17 @@
  *               picked its value up); Shift + fader: CC cc_fader_shift while Shift is held
  *   Mute        toggles mute, CC cc_mute = 127 / 0
  *   Solo        (MCC_SOLO_MUTES) toggles solo: the other tracks are muted while any is soloed
- *   Rec         focus group A: knobs 1-4 send CC cc_focus..+3 of this track (again: off)
- *   Select      focus group B: knobs 5-8 send CC cc_focus..+3 of this track (again: off)
- *   knob k      CC cc_knob on channel track_base + k (absolute: the mixer keeps the value)
+ *   Rec         focus group Rec: every encoder k with a CC in focus[0][k] sends that CC on this
+ *               track's channel (the others stay as they are); again: off
+ *   Select      the same with focus[1]. If the two groups share an encoder, only one can be on:
+ *               turning one on blinks both buttons fast for FOCUS_CONFLICT_MS, then the other
+ *               goes off and this one on
+ *   encoder k   CC cc_encoder on channel track_base + k (absolute: the mixer keeps the value)
  *   Play / Pause / Record / Rewind / FF / << / >> / arrows: the stock DAW notes
  *   Shift + Mute / Solo / Rec / Select   (MCC_SPECIAL) fader special mode: mod wheel / pitch
  *               bend / channel pressure / pan (CC 10), toggles; the button's LED blinks while it
  *               is on; the button alone also ends it
- * DAW mode: the stock DAW mode (Mackie Control): knobs CC 16-23 relative, faders pitch bend 1-8
+ * DAW mode: the stock DAW mode (Mackie Control): encoders CC 16-23 relative, faders pitch bend 1-8
  *   with touch notes 104-111, buttons notes; LEDs follow the host.
  * Always:
  *   Shift + Rewind / Fast-forward        page down / up; the LED above fader <page> blinks fast
@@ -57,7 +60,12 @@ enum { FM_VOLUME, FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
 
 static u8 page;                                     /* 0-based */
 static u8 mute[16], solo[16], sent_mute[16];        /* CC mode: per track */
-static s8 focus_a = -1, focus_b = -1;               /* CC mode: track, -1 = none */
+static s8 focus[2] = { -1, -1 };                    /* CC mode: Rec / Select group: track, -1 = none */
+#define FOCUS_CONFLICT_MS 500
+static struct {
+    u32 at;                                         /* 0 = nothing waiting */
+    u8 group, track;
+} focus_wait;                                       /* a group waiting for the other to go off */
 static u8 fader_mode[16];                           /* CC mode: per track, FM_* */
 static u8 playing;
 static u32 page_shown_at;
@@ -427,7 +435,7 @@ static u8 knob_prog[16];
 static target_t knob_resolve(int k)
 {
     const mcfg_entry_t *e = mcfg_resolve(MCTL_KNOB(k), page + 1, SHIFT_HELD());
-    target_t n = { TK_CC, 0, mcfg->cc_knob, 0, 127, 0, mcfg->accel };
+    target_t n = { TK_CC, 0, mcfg->cc_encoder, 0, 127, 0, mcfg->accel };
 
     if (e) {
         u8 a = e->flags & MF_ACCEL_MASK;
@@ -442,12 +450,12 @@ static target_t knob_resolve(int k)
         n.accel = 0;
         return n;
     }
-    if (k < 4 && focus_a >= 0 && !(mcfg->cc_focus & MCFG_NONE)) {
-        n.ch = (u8)focus_a, n.num = (mcfg->cc_focus + k) & 127;
-    } else if (k >= 4 && focus_b >= 0 && !(mcfg->cc_focus & MCFG_NONE)) {
-        n.ch = (u8)focus_b, n.num = (mcfg->cc_focus + k - 4) & 127;
-    } else {
-        n.ch = (u8)track_of(k);             /* default: CC cc_knob of the strip's track */
+    n.ch = (u8)track_of(k);                 /* default: CC cc_encoder of the strip's track */
+    for (int g = 0; g < 2; g++) {
+        if (focus[g] >= 0 && !(mcfg->focus[g][k] & MCFG_NONE)) {
+            n.ch = (u8)focus[g], n.num = mcfg->focus[g][k];
+            break;
+        }
     }
     if (n.num & MCFG_NONE) {
         n.kind = TK_NONE;
@@ -576,6 +584,72 @@ static void mapped_button(int b, const mcfg_entry_t *e, int down)
     }
 }
 
+/* ------------------------------------------------------------------ focus groups (CC mode) */
+
+static int focus_used(int g)
+{
+    for (int k = 0; k < 8; k++) {
+        if (!(mcfg->focus[g][k] & MCFG_NONE)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int focus_overlap(void)
+{
+    for (int k = 0; k < 8; k++) {
+        if (!(mcfg->focus[0][k] & MCFG_NONE) && !(mcfg->focus[1][k] & MCFG_NONE)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* the waiting group takes over: the other goes off */
+static void focus_finish(void)
+{
+    focus[!focus_wait.group] = -1;
+    focus[focus_wait.group] = (s8)focus_wait.track;
+    focus_wait.at = 0;
+}
+
+static void focus_tick(void)
+{
+    if (focus_wait.at && smcpad_millis() - focus_wait.at >= FOCUS_CONFLICT_MS) {
+        focus_finish();
+    }
+}
+
+/* Rec (g = 0) / Select (g = 1) of track t pressed */
+static void focus_press(int g, int t)
+{
+    if (focus_wait.at) {                    /* pressed during a blink: finish it first */
+        focus_finish();
+    }
+    if (!focus_used(g)) {
+        return;
+    }
+    if (focus[g] == t) {
+        focus[g] = -1;
+    } else if (focus[!g] >= 0 && focus_overlap()) {
+        focus_wait.group = (u8)g;
+        focus_wait.track = (u8)t;
+        focus_wait.at = stamp();
+    } else {
+        focus[g] = (s8)t;
+    }
+}
+
+/* the LED of Rec / Select of track t: on while focused; both buttons of a conflict blink fast */
+static int focus_led(int g, int t, int fast)
+{
+    if (focus_wait.at && ((g == focus_wait.group && t == focus_wait.track) || (g != focus_wait.group && t == focus[g]))) {
+        return fast;
+    }
+    return focus[g] == t;
+}
+
 static void cc_strip_button(int strip, int row, int down)
 {
     static const u8 mode_of_row[4] = { FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
@@ -601,14 +675,8 @@ static void cc_strip_button(int strip, int row, int down)
         }
         break;
     case SMCMIXER_ROW_REC:
-        if (!(mcfg->cc_focus & MCFG_NONE)) {
-            focus_a = focus_a == t ? -1 : t;
-        }
-        break;
     case SMCMIXER_ROW_SELECT:
-        if (!(mcfg->cc_focus & MCFG_NONE)) {
-            focus_b = focus_b == t ? -1 : t;
-        }
+        focus_press(row - SMCMIXER_ROW_REC, t);
         break;
     }
 }
@@ -697,7 +765,7 @@ static void leds_update(void)
             if ((mcfg->cc_flags & MCC_SPECIAL) && fader_mode[t] == mode_of_row[row]) {
                 on = blink;
             } else {
-                on = row == 0 ? sent_mute[t] : row == 1 ? solo[t] : row == 2 ? focus_a == t : focus_b == t;
+                on = row == 0 ? sent_mute[t] : row == 1 ? solo[t] : focus_led(row - 2, t, fast);
             }
         } else if (mcfg->mode == MODE_CC && b == SMCMIXER_BTN_PLAY) {
             on = playing;
@@ -854,6 +922,8 @@ void mixer_config_changed(void)
         page = 0;
     }
     memset(btn_toggle, 0, sizeof(btn_toggle));
+    focus[0] = focus[1] = -1;               /* the groups may have changed */
+    focus_wait.at = 0;
     for (int f = 0; f < NUM_STRIPS; f++) {
         fader_target[f].kind = 0xFF;        /* forces a fresh retarget */
     }
@@ -922,6 +992,7 @@ void mixer_app_run(void)
         } else {
             boot_combo_since = 0;
         }
+        focus_tick();
         leds_update();
         values_save_if_due();
         mixer_blemidi_poll();

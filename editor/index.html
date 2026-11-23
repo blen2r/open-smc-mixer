@@ -47,8 +47,8 @@
   .ctl.inherited .v { color: var(--accent2); }
   .ctl.disabled .v { color: var(--bad); }
   .ctl.reserved { cursor: default; opacity: .7; }
-  .knob { border-radius: 50px; text-align: center; padding-top: 8px; min-height: 64px; }
-  .knob::before { content: ''; display: block; width: 26px; height: 26px; margin: 0 auto 4px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #555b63, #2b2f34); border: 1px solid #0006; }
+  .encoder { border-radius: 50px; text-align: center; padding-top: 8px; min-height: 64px; }
+  .encoder::before { content: ''; display: block; width: 26px; height: 26px; margin: 0 auto 4px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #555b63, #2b2f34); border: 1px solid #0006; }
   .led { width: 10px; height: 10px; border-radius: 50%; background: #3a1f1a; margin: 0 auto; border: 1px solid #0006; }
   .led.on { background: var(--led); box-shadow: 0 0 8px var(--led); }
   .fader { min-height: 170px; display: flex; flex-direction: column; }
@@ -71,6 +71,9 @@
   .tb { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .tb label { font-size: 12px; color: var(--muted); }
   .tb input { width: 100%; }
+  .fg { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
+  .fg label { font-size: 11px; color: var(--muted); text-align: center; }
+  .fg input { width: 100%; padding-left: 2px; padding-right: 2px; text-align: center; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; width: min(640px, calc(100vw - 32px)); padding: 16px; }
   dialog::backdrop { background: rgba(0,0,0,.55); }
   #pkList { max-height: 60vh; overflow: auto; margin-top: 8px; }
@@ -127,7 +130,7 @@
 </main>
 <dialog id="picker">
   <div class="row"><h2 style="margin:0">Templates</h2><span class="spacer"></span><button id="pkClose">Close</button></div>
-  <p class="hint">A template sets CC mode's profile and mappings for a device. DAW mode and your fader / knob
+  <p class="hint">A template sets CC mode's profile and mappings for a device. DAW mode and your fader / encoder
     preferences stay. Templates live in editor/templates/ (shared) and editor/templates/local/ (yours).</p>
   <div class="row"><input type="search" id="pkSearch" placeholder="Search name, device, author" style="flex:1">
     <label><input type="checkbox" id="pkStars"> ★ only</label></div>

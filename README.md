@@ -27,12 +27,13 @@ repository.
 ## Features
 
 - **DAW mode**, the default: the stock firmware's Mackie Control layout (faders as pitch bend
-  with touch notes, knobs as V-Pots, buttons as notes, LEDs driven by the host).
-- **CC mode**: each strip is a track on its own MIDI channel. What the faders, knobs and strip
+  with touch notes, encoders as V-Pots, buttons as notes, LEDs driven by the host).
+- **CC mode**: each strip is a track on its own MIDI channel. What the faders, encoders and strip
   buttons send comes from a **profile** you set in the editor or load from a **template**:
   - fader: a CC (volume), Shift + fader: another (pan);
   - Mute toggles a CC; Solo mutes the other tracks (for devices without a solo CC);
-  - Rec / Select focus knobs 1-4 / 5-8 on four CCs of that track;
+  - Rec / Select: two focus groups, each turning any of the 8 encoders to CCs of that track
+    (both buttons blink when the groups share an encoder and one takes over);
   - Shift + Mute / Solo / Rec / Select turn a fader into mod wheel / pitch bend / pressure / pan.
 - **Shift + Left / Right** switch DAW / CC mode, as on the stock firmware (the lit arrow shows the
   mode while Shift is held). The mode is kept across power cycles.
@@ -43,7 +44,7 @@ repository.
 - **Faders**: jump or pickup (global, or per mapping); the LED above a fader stays lit while the
   fader is not at its value and goes off when it gets there. Noise filtering so a resting fader
   stays quiet.
-- **Knobs**: absolute values kept on the mixer, with acceleration you can tune or turn off.
+- **Encoders**: absolute values kept on the mixer, with acceleration you can tune or turn off.
 - **Values coming back** from the device (CC, pitch bend, pressure) update the mixer, without
   feedback loops; optionally remembered across power cycles.
 - **Bluetooth MIDI** (the mixer is a BLE-MIDI peripheral, "SMC-Mixer") and USB-MIDI at once.

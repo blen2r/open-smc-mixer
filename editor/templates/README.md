@@ -1,8 +1,8 @@
 # Templates
 
-A template sets the mixer's **CC mode** for one device: the profile (which CC the faders, knobs,
+A template sets the mixer's **CC mode** for one device: the profile (which CC the faders, encoders,
 Mute, Solo and focus buttons send), the pages and their tracks, and any extra mappings. DAW mode
-and personal preferences (fader takeover, LEDs, knob acceleration) are not part of it. In the
+and personal preferences (fader takeover, LEDs, encoder acceleration) are not part of it. In the
 editor: Settings → **Choose a template…** (search, ★ to keep favourites on top).
 
 Each template is two files:

@@ -18,9 +18,10 @@ ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "editor" / "templates"
 NAME_LEN = 28
 TYPES = {"disabled", "cc", "note", "program", "pitchbend", "pressure", "base"}
-SETTINGS = {"pages", "track_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_knob",
-            "cc_focus", "solo_mutes", "special_modes"}
-NULLABLE = {"cc_fader_shift", "cc_mute", "cc_focus"}
+SETTINGS = {"pages", "track_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder",
+            "solo_mutes", "special_modes", "focus_rec", "focus_select"}
+NULLABLE = {"cc_fader_shift", "cc_mute", "cc_encoder"}
+OLD = {"cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_select"}
 
 
 def problems(t, path):
@@ -36,14 +37,18 @@ def problems(t, path):
     s = t.get("settings")
     if not isinstance(s, dict):
         return out + ['missing "settings"']
+    for k in sorted(set(s) & set(OLD)):
+        out.append(f'settings: "{k}" is from an older editor, now {OLD[k]} (save the template again)')
     for k in sorted(SETTINGS - set(s)):
         out.append(f'settings: missing "{k}"')
-    for k in ("cc_fader", "cc_fader_shift", "cc_mute", "cc_knob", "cc_focus"):
+    for k in ("cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder"):
         v = s.get(k)
         if not (v is None and k in NULLABLE) and not (isinstance(v, int) and 0 <= v <= 127):
             out.append(f"settings: {k} must be 0..127" + (" or null" if k in NULLABLE else ""))
-    if s.get("cc_focus") is not None and s.get("cc_focus", 0) > 124:
-        out.append("settings: cc_focus must leave room for 4 CCs (<= 124)")
+    for k in ("focus_rec", "focus_select"):
+        g = s.get(k)
+        if not (isinstance(g, list) and len(g) == 8 and all(v is None or (isinstance(v, int) and 0 <= v <= 127) for v in g)):
+            out.append(f"settings: {k} must be 8 values, each a CC 0..127 or null (one per encoder)")
     if not (isinstance(s.get("pages"), int) and 1 <= s["pages"] <= 8):
         out.append("settings: pages must be 1..8")
     tb = s.get("track_base")
@@ -52,8 +57,8 @@ def problems(t, path):
     maps = t.get("mappings")
     if not isinstance(maps, list):
         return out + ['missing "mappings"']
-    if len(maps) > 240:
-        out.append("more than 240 mappings")
+    if len(maps) > 238:
+        out.append("more than 238 mappings")
     for i, m in enumerate(maps):
         ok = (isinstance(m.get("control"), int) and 0 <= m["control"] <= 59 and
               isinstance(m.get("page"), int) and 0 <= m["page"] <= 8 and isinstance(m.get("shift"), bool) and

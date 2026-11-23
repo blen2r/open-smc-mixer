@@ -27,6 +27,14 @@ in the browser.
   all pages + Shift, all pages, then the mode.
 - **Settings**: the mixer's mode (also Shift + Left / Right on the mixer), CC mode's profile,
   **Choose a template…** and **Save as template…** ([templates/README.md](templates/README.md)).
+  - **Focus groups**: one row of 8 boxes for Rec, one for Select, one box per encoder. Rec on a
+    strip makes each encoder with a CC in its box send that CC on the strip's track; empty boxes
+    leave the encoder alone. If both rows use the same encoder, only one group can be on at a time
+    (on the mixer, both buttons blink and the other group goes off).
+  - **Track of strip 1, per page**: strip 1 of each page is that track (= MIDI channel), strips 2-8
+    the next ones. To send one control somewhere else, map it.
+- **Factory reset**: every mapping and setting back to the defaults (DAW mode, the "OP-XY - blen2r"
+  profile, 2 pages), stored at once. Remembered fader / encoder values are kept. Export first.
 - **Copy to all pages** moves a mapping to the all-pages layer (e.g. a Shift + fader macro that
   works on every page).
 - **Save to mixer** sends the whole configuration; the mixer checks it (CRC) before storing it.
@@ -39,4 +47,4 @@ Node for tests), `device.js` (Web MIDI and the simulated mixer), `app.js` (the p
 ## QA
 
 See [QA.md](../QA.md): `host/selftest.py` offline, `host/mixer_qa.py` on the hardware (the editor
-round trip and 36 guided checks).
+round trip and 45 guided checks).

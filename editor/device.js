@@ -127,7 +127,7 @@ class SimulatedLink extends MixerLink {
     switch (cmd) {
       case 0x01: {
         const l = this.active.length;
-        this.reply(seq, 0, [2, 0, CFG.VERSION, 0, CFG.MAX_BYTES & 0xFF, CFG.MAX_BYTES >> 8, 61, 8, 1, l & 0xFF, l >> 8, this.active[8]]);
+        this.reply(seq, 0, [3, 0, CFG.VERSION, 0, CFG.MAX_BYTES & 0xFF, CFG.MAX_BYTES >> 8, 61, 8, 1, l & 0xFF, l >> 8, this.active[8]]);
         break;
       }
       case 0x02: this.reply(seq, 0, Array.from(this.active.slice(u16(0), u16(0) + d[2]))); break;

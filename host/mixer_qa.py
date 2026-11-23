@@ -6,9 +6,9 @@
     python3 host/mixer_qa.py --from 12      # start the hardware checks at check 12
 
 1. Your current configuration is saved to work/qa_backup_<time>.json (and restored at the end).
-2. Editor: you import host/qa/qa_config.json in the web editor, make five listed changes (in both modes) and save.
+2. Editor: you import host/qa/qa_config.json in the web editor, make six listed changes (in both modes) and save.
    The script reads the configuration back and checks it is exactly the QA one plus the changes.
-3. Hardware: the script asks for one action at a time ("turn knob 1 right") and checks the MIDI the
+3. Hardware: the script asks for one action at a time ("turn encoder 1 right") and checks the MIDI the
    mixer sends on USB. It knows which control you touched (editor events), so a wrong control or
    page is reported as such. A check passes on its own once the expected messages came; press
    Enter to end one early, "s" + Enter to skip it.
@@ -34,7 +34,7 @@ WORK = os.path.join(os.path.dirname(HERE), "work")
 GREEN, RED, YEL, DIM, BOLD, OFF = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m", "\033[0m"
 
 # controls (editor/config.js CONTROLS)
-KNOB = lambda k: k - 1                      # 1-based names, as printed on the mixer
+ENC = lambda k: k - 1                       # encoders; 1-based names, as printed on the mixer
 FADER = lambda f: 8 + f - 1
 STRIP = lambda s, row: 16 + (s - 1) * 4 + ["mute", "solo", "rec", "select"].index(row)
 BTN = {n: 48 + i for i, n in enumerate(["play", "pause", "record", "rewind", "ff", "<<", ">>",
@@ -44,7 +44,7 @@ BTN["shift"] = 60
 
 def control_name(c):
     if c < 8:
-        return f"Knob {c + 1}"
+        return f"Encoder {c + 1}"
     if c < 16:
         return f"Fader {c - 7}"
     if c < 48:
@@ -123,12 +123,14 @@ def any_of(*ps):
 EDITOR_STEPS = """\
 In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
   1. Connect (USB), then {bold}Import{off} host/qa/qa_config.json and {bold}Save to mixer{off}.
-  2. Make these five changes (Mode bar on {bold}CC{off}, page "All pages", layer Normal, unless said):
-     a. Click {bold}Knob 1{off}, change the CC number 20 -> {bold}22{off}.
+  2. Make these six changes (Mode bar on {bold}CC{off}, page "All pages", layer Normal, unless said):
+     a. Click {bold}Encoder 1{off}, change the CC number 20 -> {bold}22{off}.
      b. Click {bold}Strip 4 Mute{off} (marked disabled), click {bold}Remove mapping{off}.
      c. Click {bold}Down{off}: Type CC, channel 1, CC number {bold}52{off}, Button {bold}toggle{off}.
      d. Settings: {bold}Pages 3{off}.
      e. Mode bar on {bold}DAW{off}: click {bold}Down{off}: Type CC, channel 1, CC number {bold}71{off} (momentary).
+     f. Settings, Focus groups: in the {bold}Select{off} row, box {bold}6{off}: {bold}64{off} (the template name
+        above becomes "custom").
   3. {bold}Save to mixer{off}. (Leave the editor open; you can tick "highlight controls" and watch the
      monitor during the hardware checks.)
 """
@@ -137,13 +139,15 @@ In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
 def expected_config():
     cfg = json.load(open(QA_CONFIG))
     ms = cfg["mappings"]
-    next(m for m in ms if m["control"] == KNOB(1))["number"] = 22
+    next(m for m in ms if m["control"] == ENC(1))["number"] = 22
     cfg["mappings"] = [m for m in ms if m["control"] != STRIP(4, "mute")]
     cfg["mappings"].append(dict(mode="cc", control=BTN["down"], page=0, shift=False, type="cc", channel=1, number=52,
                                 flags=1, min=0, max=127))
     cfg["mappings"].append(dict(mode="daw", control=BTN["down"], page=0, shift=False, type="cc", channel=1,
                                 number=71, flags=0, min=0, max=127))
     cfg["pages"] = 3
+    cfg["focus_select"][5] = 64
+    cfg["name"] = ""                        # a profile edited by hand is no longer the template's
     return cfg
 
 
@@ -227,16 +231,16 @@ def checks(qa):
     return [
         C("Press Shift + Rewind twice (to be sure you are on page 1). Then press Enter.", ctl=BTN["rewind"],
           silent=True, shift=True),
-        # knobs
-        C("Turn knob 1 to the right a little.", ctl=KNOB(1), page=1, need=[cc(2, 22)]),
-        C("Turn knob 2 a lot to the right (a few turns).", ctl=KNOB(2), page=1,
+        # encoders
+        C("Turn encoder 1 to the right a little.", ctl=ENC(1), page=1, need=[cc(2, 22)]),
+        C("Turn encoder 2 a lot to the right (a few turns).", ctl=ENC(2), page=1,
           need=[cc(2, 21, value=50)], allow=cc(2, 21, 40, 50)),
-        C("Turn knob 2 a lot to the left.", ctl=KNOB(2), page=1,
+        C("Turn encoder 2 a lot to the left.", ctl=ENC(2), page=1,
           need=[cc(2, 21, value=40)], allow=cc(2, 21, 40, 50)),
-        C("Turn knob 3 a little (page 1: base profile, CC 12 of track 3).", ctl=KNOB(3), page=1,
+        C("Turn encoder 3 a little (page 1: base profile, CC 12 of track 3).", ctl=ENC(3), page=1,
           need=[cc(3, 12)]),
-        C("Turn knob 4 to the right a little.", ctl=KNOB(4), page=1, need=[pitchbend(4)]),
-        C("Turn knob 5 (disabled: must send nothing). Then press Enter.", ctl=KNOB(5), silent=True),
+        C("Turn encoder 4 to the right a little.", ctl=ENC(4), page=1, need=[pitchbend(4)]),
+        C("Turn encoder 5 (disabled: must send nothing). Then press Enter.", ctl=ENC(5), silent=True),
         # faders
         C("Move fader 1 (no Shift).", ctl=FADER(1), page=1, need=[cc(1, 7)]),
         C("Hold Shift and move fader 1 (the macro: CC 13 ch 12).", ctl=FADER(1), shift=True,
@@ -265,11 +269,27 @@ def checks(qa):
           need=[note_on(1, 96), note_off(1, 96)], exact=2),
         C("Hold Shift, press and release Up (trigger: note 61 on and off at once).", ctl=BTN["up"],
           shift=True, need=[note_on(1, 61), note_off(1, 61)], exact=2),
+        # focus groups (Rec: encoder 3 -> CC 60, 6 -> 61, 7 -> 62; Select: 6 -> 64, from the editor)
+        C("Press Strip 2 Rec once (focus on track 2: sends nothing). Then press Enter.", ctl=STRIP(2, "rec"),
+          silent=True, ask="Is the Strip 2 Rec LED lit?"),
+        C("Turn encoder 3 a little (Rec focus: CC 60 of track 2).", ctl=ENC(3), page=1, need=[cc(2, 60)]),
+        C("Turn encoder 7 a little (Rec focus: CC 62 of track 2).", ctl=ENC(7), page=1, need=[cc(2, 62)]),
+        C("Turn encoder 8 a little (empty in the Rec group: as usual, CC 12 of track 8).", ctl=ENC(8), page=1,
+          need=[cc(8, 12)]),
+        C("Press Strip 4 Select once (its group shares encoder 6 with Rec). Then press Enter.",
+          ctl=STRIP(4, "select"), silent=True,
+          ask="Did Strip 2 Rec and Strip 4 Select blink fast together for about half a second, then "
+              "Strip 2 Rec go off and Strip 4 Select stay lit?"),
+        C("Turn encoder 6 a little (Select focus: CC 64 of track 4).", ctl=ENC(6), page=1, need=[cc(4, 64)]),
+        C("Turn encoder 3 a little (Rec is off now: CC 12 of track 3).", ctl=ENC(3), page=1, need=[cc(3, 12)]),
+        C("Press Strip 4 Select again (focus off). Then press Enter.", ctl=STRIP(4, "select"), silent=True,
+          ask="Is the Strip 4 Select LED off?"),
+        C("Turn encoder 6 a little (no focus: CC 12 of track 6).", ctl=ENC(6), page=1, need=[cc(6, 12)]),
         # pages
         C("Press Shift + Fast-forward once (page 2). Then press Enter.", ctl=BTN["ff"], silent=True,
           shift=True, ask="Did the page indicator blink?"),
-        C("Turn knob 3 to the right a little (page 2: program changes 0..10, ch 3).",
-          ctl=KNOB(3), page=2, need=[program(3, 0, 10)], allow=program(3, 0, 10)),
+        C("Turn encoder 3 to the right a little (page 2: program changes 0..10, ch 3).",
+          ctl=ENC(3), page=2, need=[program(3, 0, 10)], allow=program(3, 0, 10)),
         C("Move fader 4 over its whole travel (page 2: CC 40 ch 8, range 20..100).", ctl=FADER(4), page=2,
           need=[cc(8, 40, value=20), cc(8, 40, value=100)], allow=cc(8, 40, 20, 100)),
         C("Move fader 1 (page 2: volume of track 9).", ctl=FADER(1), page=2, need=[cc(9, 7)]),
@@ -284,7 +304,7 @@ def checks(qa):
           ask="While Shift was held, was the Left arrow lit (and Right off)?"),
         C("Move fader 1 (DAW mode: pitch bend ch 1, with the touch note 104).", ctl=FADER(1),
           need=[note_on(1, 104), pitchbend(1)], allow=any_of(pitchbend(1), note_on(1, 104), note_off(1, 104))),
-        C("Turn knob 1 to the right a little (DAW mode: V-Pot, CC 16 relative).", ctl=KNOB(1),
+        C("Turn encoder 1 to the right a little (DAW mode: V-Pot, CC 16 relative).", ctl=ENC(1),
           need=[cc(1, 16, 1, 63)]),
         C("Press and release Strip 1 Mute (DAW mode: note 16; the CC-mode mapping must not apply).",
           ctl=STRIP(1, "mute"), need=[note_on(1, 16), note_off(1, 16)], exact=2),

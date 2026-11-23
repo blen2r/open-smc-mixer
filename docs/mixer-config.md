@@ -12,9 +12,9 @@ per Shift layer:
 
 - **DAW mode** sends what the stock DAW mode sends (table below) unless a DAW-mode mapping says
   otherwise.
-- **CC mode** has a **profile** (which CCs the faders, knobs and strip buttons send, see "CC mode
+- **CC mode** has a **profile** (which CCs the faders, encoders and strip buttons send, see "CC mode
   profile") that a **template** sets for a device, plus CC-mode mappings on top.
-- **Pages:** 8 parameter pages; knobs and faders (and anything else) can map to something different
+- **Pages:** 8 parameter pages; encoders and faders (and anything else) can map to something different
   on each page.
 - **Shift layer:** every control can send something else while Shift is held.
 - Edited in a **web editor** (WebMIDI), no Midi Suite / Wine needed.
@@ -23,12 +23,12 @@ per Shift layer:
 
 | group | count | id range | notes |
 |---|---|---|---|
-| knob | 8 | `K1..K8` | endless encoders, no push switch; LED ring/indicator driven by the host |
+| encoder | 8 | `E1..E8` | endless rotary encoders ("knobs"), no push switch; LED ring/indicator driven by the host |
 | fader | 8 | `F1..F8` | not motorized; F1 is the leftmost (no master fader) |
 | track button | 8 x 4 | `T1.1..T8.4` | column x row, top row = 1; have LEDs |
 | global button | 11 | `G1..G11` | bottom row, left to right: Play, Pause, Record, Rewind, Fast-forward, `<<`, `>>`, Up, Down, Left, Right |
 | oval button | 2 | `O1`, `O2` | top right: O1 = Bluetooth, O2 = **Shift** (neither sends MIDI) |
-| fader LED | 8 | `L1..L8` | under each knob / above each fader; stock: **blinks** while fader position != host value (tight tolerance), off when they match |
+| fader LED | 8 | `L1..L8` | under each encoder / above each fader; stock: **blinks** while fader position != host value (tight tolerance), off when they match |
 
 ## DAW mode defaults (stock fw 013, captured 2026-11-22)
 
@@ -52,7 +52,7 @@ Mackie Control layout. The stock firmware sends everything identically on **both
 Buttons: Note on velocity 127 on press, Note off on release.
 Shift has no effect in stock DAW mode (Shift + Up / Down send the same as Up / Down). Shift + Left /
 Right switches DAW / CC mode silently (no MIDI); the lit arrow shows the mode.
-LEDs (track buttons, knob indicators) are driven by the host (MCU feedback), not locally.
+LEDs (track buttons, encoder indicators) are driven by the host (MCU feedback), not locally.
 
 ## Resolution order
 
@@ -101,11 +101,11 @@ differ. Setting `fader_takeover`:
 - `pickup`: send nothing until the fader crosses the stored value for this page, then follow it.
 
 A **global** value, overridable **per page and per fader mapping** (`inherit` | `jump` | `pickup`).
-Knobs are endless encoders and do not need it.
+Encoders are endless and do not need it.
 
 ### Fader mismatch LED
 
-Each fader has an LED above it (the lights under the knobs). Unlike the stock DAW mode (which blinks), it is **solid** while
+Each fader has an LED above it (the lights under the encoders). Unlike the stock DAW mode (which blinks), it is **solid** while
 the fader's physical position differs from the value it should have, and turns off the moment the fader reaches
 the value, so you can see exactly when you've hit it (a blinking LED makes that ambiguous):
 
@@ -130,10 +130,17 @@ Settings → CC mode profile). Strip *n* of page *p* = track / MIDI channel `tra
 | `cc_fader_shift` | Shift + fader | this CC while Shift is held (none: as without Shift) |
 | `cc_mute` | Mute | toggles this CC 127 / 0; LED = muted (none: Mute sends nothing) |
 | `solo_mutes` | Solo | toggles solo by muting (`cc_mute`) the other tracks while any is soloed |
-| `cc_knob` | knob | this CC on the strip's channel (absolute, the mixer keeps the value) |
-| `cc_focus` | Rec / Select | knobs 1-4 / 5-8 send `cc_focus`..+3 of this strip's track; again: off (none: no focus) |
+| `cc_encoder` | encoder | this CC on the strip's channel (absolute, the mixer keeps the value; none: nothing) |
+| `focus_rec` | Rec | focus group: 8 slots, one per encoder, each a CC or none. Rec on a strip makes every encoder with a CC send it on that strip's track; the others stay as they are; again: off. All none: Rec sends nothing |
+| `focus_select` | Select | the same, a second group |
 | `special_modes` | Shift + Mute / Solo / Rec / Select | the fader's special modes (below) |
 | | transport, arrows | the stock DAW notes |
+
+**Focus groups.** One strip per group at a time (Rec on another strip moves it); the button's LED
+is lit while its group is on that strip. Both groups can be on together when they use different
+encoders (the OP-XY template: Rec = encoders 1-4, Select = 5-8). When they share an encoder only
+one can be on: turning one on blinks both buttons fast for half a second, then the other goes off.
+Encoders with their own mapping are not affected by focus.
 
 `name` records the template the profile came from (28 ASCII characters); the editor clears it
 when the profile is edited by hand. The factory profile is the "OP-XY - blen2r" template's.
@@ -155,7 +162,8 @@ CC 7, track mute CC 9, track pan CC 10, all on channels 1-16; no solo CC. The us
 for a track's 4 parameters (the table itself lists "track parameters" as CC 46 -- to check).
 
 Strip *n* = OP-XY track / channel *n*; page 2 covers tracks 9-16. As a profile: `cc_fader` 7,
-`cc_fader_shift` 10, `cc_mute` 9, `solo_mutes`, `cc_knob` 12, `cc_focus` 12, `special_modes`.
+`cc_fader_shift` 10, `cc_mute` 9, `solo_mutes`, `cc_encoder` 12, `special_modes`, `focus_rec`
+encoders 1-4 = CC 12-15, `focus_select` encoders 5-8 = CC 12-15.
 
 | control | does |
 |---|---|
@@ -163,14 +171,14 @@ Strip *n* = OP-XY track / channel *n*; page 2 covers tracks 9-16. As a profile: 
 | Mute *n* | toggles mute: CC 9 = 127 / 0 on channel *n*; LED = muted |
 | Solo *n* | toggles solo -- the OP-XY has none, so the mixer does it: it mutes (CC 9) the other tracks and restores them when solo goes off; LED = soloed (suggestion, TBD) |
 | Play | play / stop toggle (the stock DAW note 94 worked on the OP-XY; whether to send MIDI Start / Stop instead is TBD) |
-| knob *k* | by default its own mapping from the editor; if none: CC 12 on channel *k*. Knobs are relative, the OP-XY wants absolute values: the mixer keeps the value per (channel, CC) and sends it |
-| Rec *n* | **focus group A**: knobs 1-4 send CC 12-15 on channel *n*. One strip at a time (Rec on another strip moves it); LED lit while focused; pressing it again goes back to the default mappings |
-| Select *n* | **focus group B**: same for knobs 5-8 |
+| encoder *k* | by default its own mapping from the editor; if none: CC 12 on channel *k*. Encoders are relative, the OP-XY wants absolute values: the mixer keeps the value per (channel, CC) and sends it |
+| Rec *n* | **focus group Rec**: encoders 1-4 send CC 12-15 on channel *n*. One strip at a time (Rec on another strip moves it); LED lit while focused; pressing it again goes back to the default mappings |
+| Select *n* | **focus group Select**: same for encoders 5-8 |
 
 ### Values coming back (implemented, 2026-11-22)
 
 A CC / pitch bend / channel pressure the mixer **receives** (BLE or USB) becomes that control's
-known value: a fader on it has to pick it up again and its LED shows the mismatch; a knob
+known value: a fader on it has to pick it up again and its LED shows the mismatch; an encoder
 continues from it. Input never triggers output (no loops); a value we are sending on that very
 control right now (within 1.5 s, inside the range we just sent) is taken as our own echo and
 ignored. The values are also kept across power cycles (saved ~5 s after the last change).
@@ -238,7 +246,7 @@ Instruments, YouTube `g7Wvq8PN-84`, around 8:00). Kept simple: any of the 8 page
 TBD: does holding *any* Solo (Rec, Select) switch all 8 faders to that parameter, or only that
 strip's button for that strip's fader (the first lets you set several steps at once); note range
 of a fader (all 128 notes, or a range / scale); how the playing step is shown (e.g. a moving LED
-on the Rec or Select row); what the knobs do on a sequencer page (pass through to the mapping,
+on the Rec or Select row); what the encoders do on a sequencer page (pass through to the mapping,
 or per-step extras); pattern length other than 8 (e.g. chaining two pages).
 
 ## Mapping
@@ -249,29 +257,33 @@ or per-step extras); pattern length other than 8 (e.g. chaining two pages).
 | `channel` | 1..16 | all but inherit/disabled |
 | `number` | 0..127 (CC / note / program) | cc, note, pc |
 | `min`, `max` | 0..127 (0..16383 for pitchbend) | absolute controls, button values |
-| `encoder` | `absolute`, `relative-2c`, `relative-bin`, `relative-sb` (TBD list) + `speed` | knobs |
-| `accel` | `inherit`, `off`, or a curve (steps closer than 6 / 12 ms count x3 / x2 by default, editable) | knobs; also a global setting |
+| `encoder` | `absolute`, `relative-2c`, `relative-bin`, `relative-sb` (TBD list) + `speed` | encoders |
+| `accel` | `inherit`, `off`, or a curve (steps closer than 6 / 12 ms count x3 / x2 by default, editable) | encoders; also a global setting |
 | `button` | `momentary`, `toggle`, `trigger` | buttons |
 | `led` | `follow` (lit while on), `off`, `on`, `daw` (DAW feedback) | buttons with LEDs |
 | `takeover` | `inherit`, `jump`, `pickup` | faders |
 
 `daw` sends the control's DAW-mode message even on a page/layer where it would otherwise be
-overridden (useful in the Shift layer: "Shift + this knob = the DAW's pan").
+overridden (useful in the Shift layer: "Shift + this encoder = the DAW's pan").
 
 ## Storage on the device (sparse)
 
-Most controls inherit, so only overrides are stored: a 64-byte header (settings, CC profile,
-template name, CRC) + up to 240 entries of 10 bytes, in the VM (key 2, fixed size). Layout:
-`mixer_config.h`. Entry layer: bits 0..3 page (0 = all pages), bit 4 Shift, bit 5 DAW mode.
-Version 1 (32-byte header, `base` = DAW / OP-XY, key 1) is converted once on the first boot of a
-firmware that knows version 2: base OP-XY became CC mode with the OP-XY profile.
+Most controls inherit, so only overrides are stored: an 80-byte header (settings, CC profile,
+template name, focus groups, CRC) + up to 238 entries of 10 bytes, in the VM (key 2, 2464 bytes
+whatever the version). Layout: `mixer_config.h`. Entry layer: bits 0..3 page (0 = all pages),
+bit 4 Shift, bit 5 DAW mode. Version 2 (64-byte header, one `cc_focus` CC for both groups, up to
+240 entries) is converted on the first boot of a firmware that knows version 3: `cc_focus` *c*
+became Rec = encoders 1-4 on *c*..*c*+3, Select = encoders 5-8 on the same. (Version 1, key 1,
+was converted to version 2 by the firmwares of that time; version 3 firmwares no longer read it.)
+The editor and `host/mixer_cfg.py` convert older exports and templates the same way (`cc_knob`
+became `cc_encoder`).
 
 ## Editor protocol (SysEx)
 
 **Implemented (2026-11-22)**, as below with these details: 8-bit data is sent 8-to-7 packed (one
 byte with the top bits of up to 7 bytes, then those bytes' low 7 bits); the binary layout of the
-configuration is in `fw/smcpad/examples/mixer/mixer_config.h` (version 2: header 64 bytes,
-entries 10 bytes, up to 240); hello also returns the current mode; `70` enters the bootloader, `71`
+configuration is in `fw/smcpad/examples/mixer/mixer_config.h` (version 3: header 80 bytes,
+entries 10 bytes, up to 238); hello also returns the current mode; `70` enters the bootloader, `71`
 returns echo diagnostics; `host/mixer_cfg.py` and the editor (`editor/`) speak it.
 
 Separate from the stock SINCO protocol. Manufacturer ID `7D` (non-commercial / educational),
@@ -300,8 +312,8 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
   control shows where its current value comes from (this layer / inherited from ... / the mode).
 - Settings: the mixer's mode, the CC profile, **Choose a template…** (search, favourites, the
   template's `.md`), **Save as template…** (downloads the `.json` and a started `.md`).
-- Global settings (fader takeover, fader mismatch LED, page LED blink, knob acceleration: on / off
-  and its curve, overridable per knob).
+- Global settings (fader takeover, fader mismatch LED, page LED blink, encoder acceleration: on / off
+  and its curve, overridable per encoder).
 - Live MIDI monitor, JSON import / export, a simulated device for working without the hardware.
 
 ## Open questions
