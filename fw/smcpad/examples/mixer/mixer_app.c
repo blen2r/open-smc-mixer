@@ -47,6 +47,11 @@ static u32 boot_combo_since;
 static u8 cc_val[16][128];
 static u8 pb_val[16], at_val[16];
 static u8 knob_val[16][4];                          /* CC 12..15 */
+/* when each fader / knob slot last sent (ms): incoming values for a control we are sending on
+ * right now are our own echo (a device with MIDI thru), not news */
+#define ECHO_MS         500
+static u32 fader_sent_at[NUM_STRIPS];
+static u32 knob_sent_at[16][4];
 
 /* per fader: what it controls now, and whether it has picked that value up */
 typedef struct { u8 kind, ch, num; } target_t;      /* kind 0 CC, 1 pitch bend, 2 pressure */
@@ -141,6 +146,7 @@ static void fader_send(int f)
     if (t->kind != 1 && v == target_value(t)) {
         return;                             /* the same value again: nothing to say */
     }
+    fader_sent_at[f] = smcpad_millis() | 1;
 
     switch (t->kind) {
     case 0:
@@ -219,6 +225,7 @@ static void knob_turned(int k, int steps)
     v = v < 0 ? 0 : v > 127 ? 127 : v;
     if (v != knob_val[ch][slot]) {
         knob_val[ch][slot] = (u8)v;
+        knob_sent_at[ch][slot] = smcpad_millis() | 1;
         send_cc(ch, 12 + slot, v);
     }
 }
@@ -348,10 +355,27 @@ static void leds_update(void)
  * A CC from the other side (the OP-XY echoing a change made on it, a DAW's feedback) becomes
  * the known value of that control: a fader on it has to pick it up again, and its LED shows
  * the mismatch. Pitch bend and pressure likewise. */
+static int is_target(const target_t *t, u8 type, u8 ch, u8 num)
+{
+    return t->ch == ch && ((type == 0xB0 && t->kind == 0 && t->num == num) ||
+                           (type == 0xE0 && t->kind == 1) || (type == 0xD0 && t->kind == 2));
+}
+
 static void midi_in(u8 status, u8 d1, u8 d2)
 {
     u8 type = status & 0xF0, ch = status & 0x0F;
+    u32 now = smcpad_millis();
 
+    /* our own echo? (never answered in any case: input only updates what we know) */
+    for (int f = 0; f < NUM_STRIPS; f++) {
+        if (fader_sent_at[f] && now - fader_sent_at[f] < ECHO_MS && is_target(&fader_target[f], type, ch, d1 & 127)) {
+            return;
+        }
+    }
+    if (type == 0xB0 && d1 >= 12 && d1 <= 15 && knob_sent_at[ch][d1 - 12] &&
+        now - knob_sent_at[ch][d1 - 12] < ECHO_MS) {
+        return;
+    }
     if (type == 0xB0) {
         cc_val[ch][d1 & 127] = d2 & 127;
         if (d1 >= 12 && d1 <= 15) {
@@ -368,8 +392,7 @@ static void midi_in(u8 status, u8 d1, u8 d2)
         target_t *t = &fader_target[f];
         u8 v = target_value(t);
 
-        if (t->ch == ch && v != UNKNOWN && ((type == 0xB0 && t->kind == 0 && t->num == (d1 & 127)) ||
-                                            (type == 0xE0 && t->kind == 1) || (type == 0xD0 && t->kind == 2))) {
+        if (v != UNKNOWN && is_target(t, type, ch, d1 & 127)) {
             picked[f] = v == fader_pos7[f];
             fader_side[f] = fader_pos7[f] > v ? 1 : -1;
         }
