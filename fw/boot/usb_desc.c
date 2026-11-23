@@ -101,7 +101,11 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
 static const char *const strings[] = {
     NULL,                   /* 0: language, handled below */
     "open_smc_pad",
+#ifdef BOARD_SMC_MIXER
+    "SMC-Mixer bootloader",
+#else
     "SMC-PAD bootloader",
+#endif
     "0001",
     "app",                  /* DFU alt 0: the application's app area */
     "flash",                /* DFU alt 1: the whole flash, raw, read-only */

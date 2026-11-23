@@ -82,7 +82,15 @@ static u8 sector[SECTOR_SIZE] __attribute__((aligned(4)));
 
 /* What happened, also in flash (DIAG_PAGE, inside the area the installer erases when it is
  * done), since a failed install has nothing to show it with: read it in download mode. */
+#ifdef BOARD_SMC_MIXER
+/* Not inside the staging area: a stock package fills it to the last byte (STOCK_VM_EXTRA), and
+ * a failed attempt must not overwrite the payload the next attempt needs. */
+#define DIAG_PAGE           STAGE_END                   /* 0x68000, blank stock VM */
+#define DIAG_END            (STAGE_END + SECTOR_SIZE)
+#else
 #define DIAG_PAGE           (STAGE_END - SECTOR_SIZE)   /* 0x4C000 on the pad */
+#define DIAG_END            STAGE_END
+#endif
 #define DIAG_PAGE_MAGIC     0x31474449u         /* "IDG1" */
 static u32 diag_words[8];
 
@@ -133,9 +141,12 @@ void install_main(u32 key)
         reset();
     }
 
-    /* 2. the stock firmware goes, the bootloader comes */
+    /* 2. the stock firmware goes, the bootloader comes (or, going back to stock, the other way
+     * round: then the payload may run one VM sector past erase_end, STOCK_VM_EXTRA) */
     diag(2, 0);
-    for (u32 a = DEST; a < h.erase_end; a += SECTOR_SIZE) {
+    u32 erase_to = h.erase_end > DEST + h.payload_len ? h.erase_end : DEST + h.payload_len;
+
+    for (u32 a = DEST; a < erase_to; a += SECTOR_SIZE) {
         if (flash_erase_sector(a)) {
             diag(2, 1);
             reset();
@@ -149,12 +160,32 @@ void install_main(u32 key)
             diag(2, 2);
             reset();
         }
-        sfc_cipher(sector, n, DEST + off, chip_key);
+        if (DEST + off < DEST_ERASE_STOCK) {     /* the VM is stored plaintext */
+            sfc_cipher(sector, n, DEST + off, chip_key);
+        }
         if (flash_write_sector(DEST + off, sector, n)) {
             diag(2, 3);
             reset();
         }
     }
+
+#ifdef BOARD_SMC_MIXER
+    /* A stock install: the rest of the stock VM goes too, so a stock firmware put back finds
+     * its VM as it left it (STOCK_VM_EXTRA restored it, the rest was blank) and not our
+     * application in it. The slot and staging area are erased at the very end. */
+    if (h.erase_end == DEST_ERASE_STOCK) {
+        for (u32 a = erase_to; a < VM_END; a += SECTOR_SIZE) {
+            if (a >= INSTALL_DIR && a < STAGE_END) {
+                continue;
+            }
+            if (flash_erase_sector(a)) {
+                diag(2, 4);
+                reset();
+            }
+            wdt_kick();
+        }
+    }
+#endif
 
     /* 3. boot it from now on */
     diag(3, 0);
@@ -162,7 +193,7 @@ void install_main(u32 key)
         diag(3, 1);
         reset();
     }
-    for (u32 a = INSTALL_DIR; a < STAGE_END; a += SECTOR_SIZE) {
+    for (u32 a = INSTALL_DIR; a < DIAG_END; a += SECTOR_SIZE) {
         flash_erase_sector(a);
         wdt_kick();
     }

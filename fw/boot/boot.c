@@ -98,7 +98,98 @@ START static int app_intact(void)
     return start_crc16_fast(dir + 0x20, size - 0x20) == (dir[DIR_DATA_CRC] | dir[DIR_DATA_CRC + 1] << 8);
 }
 
-/* ---------------------------------------------------------------- shift + play at power-up
+/* ---------------------------------------------------------------- shift + play at power-up */
+#ifdef BOARD_SMC_MIXER
+/* The mixer's matrix (docs/mixer-hardware.md): four 74HC595 on PB6 (clock), PB7 (data), PB4
+ * (latch), /OE on PB5, 32 bits shifted a byte at a time, MSB first; bits 16..31 select the
+ * columns (one-hot low: column c < 8 is bit 24 + c, column c >= 8 is bit 16 + c - 8), bits
+ * 0..15 are LED segments (kept high: off). A pressed key pulls its sense row PB0..PB3 low
+ * against the pull-up. Every GPIO register touched is put back, so the application still starts
+ * from the uboot's state. The LED commons (PA2, PA5, PC1, PC3) and the fader pins are left
+ * alone: as inputs after reset, no LED can light and nothing is driven into a fader. */
+#define PORTB(o)        REG32(0x1E5040u + (o))
+#define P_OUT           0x00
+#define P_IN            0x04
+#define P_DIR           0x08
+#define P_DIE           0x0C
+#define P_PU            0x10
+#define P_PD            0x14
+#define B_SR_MASK       ((1u << 4) | (1u << 5) | (1u << 6) | (1u << 7))
+#define B_SENSE_MASK    0xFu
+
+START static void spin(u32 n)
+{
+    for (volatile u32 i = 0; i < n; i++) {
+    }
+}
+
+START static void sr_write32(u32 v)
+{
+    for (int byte = 0; byte < 4; byte++) {
+        u32 b = (v >> (8 * byte)) & 0xFF;
+
+        for (int bit = 7; bit >= 0; bit--) {
+            PORTB(P_OUT) = (PORTB(P_OUT) & ~(1u << 7)) | ((b >> bit) & 1) << 7;
+            PORTB(P_OUT) &= ~(1u << 6);
+            PORTB(P_OUT) |= 1u << 6;
+        }
+    }
+    PORTB(P_OUT) &= ~(1u << 6);
+    PORTB(P_OUT) |= 1u << 4;                /* latch */
+    PORTB(P_OUT) &= ~(1u << 4);
+    spin(2000);                             /* the pull-up has to win through the diodes */
+}
+
+/* Sense rows (bit r = PBr pulled low) with the columns in col_mask selected. */
+START static u32 sense_low(u32 col_mask)
+{
+    u32 sel = 0;
+
+    for (int c = 0; c < 16; c++) {
+        if (col_mask & (1u << c)) {
+            sel |= 1u << (c < 8 ? 24 + c : 16 + c - 8);
+        }
+    }
+    sr_write32(~sel);
+    return ~PORTB(P_IN) & B_SENSE_MASK;
+}
+
+START static int key_down(u32 code)
+{
+    return (sense_low(1u << (code >> 4)) >> (code & 0xF)) & 1;
+}
+
+START static int dfu_keys_held(void)
+{
+    u32 b_out = PORTB(P_OUT), b_dir = PORTB(P_DIR), b_die = PORTB(P_DIE);
+    u32 b_pu = PORTB(P_PU), b_pd = PORTB(P_PD);
+    u32 mask = B_SR_MASK | B_SENSE_MASK;
+    int held = 1;
+
+    PORTB(P_PU) = (PORTB(P_PU) & ~B_SR_MASK) | B_SENSE_MASK;
+    PORTB(P_PD) &= ~mask;
+    PORTB(P_DIE) |= B_SENSE_MASK;
+    PORTB(P_DIR) = (PORTB(P_DIR) & ~B_SR_MASK) | B_SENSE_MASK;
+    PORTB(P_OUT) &= ~B_SR_MASK;             /* /OE low: outputs on */
+
+    /* three agreeing looks a few ms apart; a sense row low with no column selected is a fault,
+     * not a key */
+    for (int look = 0; look < 3 && held; look++) {
+        held = !sense_low(0) && key_down(DFU_KEY_PLAY) &&
+               (key_down(DFU_KEY_SHIFT_A) || key_down(DFU_KEY_SHIFT_B));
+        spin(20000);
+    }
+    sr_write32(0xFFFFFFFFu);
+
+    PORTB(P_OUT) = (PORTB(P_OUT) & ~mask) | (b_out & mask);
+    PORTB(P_DIR) = (PORTB(P_DIR) & ~mask) | (b_dir & mask);
+    PORTB(P_DIE) = (PORTB(P_DIE) & ~mask) | (b_die & mask);
+    PORTB(P_PU) = (PORTB(P_PU) & ~mask) | (b_pu & mask);
+    PORTB(P_PD) = (PORTB(P_PD) & ~mask) | (b_pd & mask);
+    return held;
+}
+#else
+/* (pad)
  * The key matrix as the console scans it (docs/hardware.md): two 74HC595 on PB6 (clock),
  * PB7 (data), PB4 (latch), /OE on PB5; a selected column is driven low, a pressed button pulls
  * the sense line PC1 low against its pull-up. Every GPIO register touched is put back, so the
@@ -173,6 +264,7 @@ START static int dfu_keys_held(void)
     PORTC(P_PD) = (PORTC(P_PD) & ~C_SENSE) | (c_pd & C_SENSE);
     return held;
 }
+#endif
 
 /* One more boot that the application has not confirmed yet; true when there were too many. */
 START static int crash_loop(void)

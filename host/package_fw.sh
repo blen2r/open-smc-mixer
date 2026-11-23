@@ -5,6 +5,7 @@
 #   host/package_fw.sh          # fw/smcpad alone at 0x1000 (built with the default TEXT_BASE)
 #   host/package_fw.sh boot     # bootloader (fw/boot) at 0x1000 + fw/smcpad at 0x9000
 #                               # (fw/smcpad built with TEXT_BASE=0x1E08120)
+#   BOARD=mixer host/package_fw.sh bootonly   # the mixer's bootloader area + update package
 #
 # Produces, in work/flash/:
 #   fw_area.bin          the app area as the CPU sees it (plaintext; the application's in
@@ -23,14 +24,33 @@ cd "$ROOT"
 MODE="${1:-solo}"
 
 APP_DIR=0x9000
-VM="--vm-base 0x71000 --vm-size 0x4000 --prct-size 0x71000"
+# BOARD=pad (default) or mixer (docs/mixer-hardware.md): the mixer's factory areas sit higher,
+# so its VM is at 0x77000 (fw/boot/boot.h APP_AREA_END), its directory template comes from its
+# own stock firmware, and its files go to work/flash/mixer/.
+BOARD="${BOARD:-pad}"
+case "$BOARD" in
+    pad)   VM_BASE=0x71000; BOOT_OUT=fw/boot/out;       FLASH=work/flash;       TEMPLATE="" ;;
+    mixer) VM_BASE=0x77000; BOOT_OUT=fw/boot/out-mixer; FLASH=work/flash/mixer
+           TEMPLATE="--dump dumps/SMC-Mixer_013_area_decrypted.bin" ;;
+    *)     echo "unknown BOARD=$BOARD (pad or mixer)" >&2; exit 2 ;;
+esac
+mkdir -p "$FLASH"
+VM="--vm-base $VM_BASE --vm-size 0x4000 --prct-size $VM_BASE"
 
 case "$MODE" in
     solo)
         python3 host/check_appbin.py
         python3 host/jlimage.py build --out work/flash/fw_area.bin --raw work/flash/fw_area_raw.bin
         ;;
+    bootonly)
+        # just the bootloader's area (BOARD=mixer: for host/install_from_stock.py --board mixer)
+        python3 host/jlimage.py build --app $BOOT_OUT/boot.bin --area-base 0x1000 $VM $TEMPLATE \
+            --out $FLASH/boot_area.bin --raw $FLASH/boot_area_raw.bin
+        python3 host/bootpkg.py --board "$BOARD"   # $FLASH/boot_update.bin (DFU alt 2)
+        exit 0
+        ;;
     boot)
+        [ "$BOARD" = pad ] || { echo "boot mode: pad only for now (BOARD=mixer: bootonly)" >&2; exit 2; }
         TEXT_BASE=$(printf '0x%X' $((0x1E00120 + APP_DIR - 0x1000))) python3 host/check_appbin.py
         python3 host/jlimage.py build --app fw/boot/out/boot.bin --area-base 0x1000 $VM \
             --out work/flash/boot_area.bin --raw work/flash/boot_area_raw.bin
@@ -48,7 +68,7 @@ print(f"bootloader {0x1000:#x}..{0x1000 + len(boot):#x}, application {app_dir:#x
 EOF
         python3 host/bootpkg.py                     # work/flash/boot_update.bin (DFU alt 2)
         ;;
-    *)  echo "usage: $0 [solo|boot]" >&2; exit 2 ;;
+    *)  echo "usage: [BOARD=pad|mixer] $0 [solo|boot|bootonly]" >&2; exit 2 ;;
 esac
 
 python3 - <<'EOF'

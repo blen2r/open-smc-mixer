@@ -14,7 +14,14 @@ typedef uint32_t u32;
 #define SFC_FLASH_BASE      0x1000u
 #define SFC_CPU_BASE        0x1E00000u
 #define APP_DIR             0x9000u                         /* application's app area */
+#ifdef BOARD_SMC_MIXER
+/* SMC-Mixer: the factory areas sit higher than on the pad (BTIF 0x7B000, EXIF 0x7C000,
+ * USRFLASH 0x7D000 with the stock settings, key_mac 0x7F000), so the VM goes right below them. */
+#define APP_AREA_END        0x77000u                        /* = the VM start both directories declare */
+#define VM_END              0x7B000u                        /* BTIF: never touched */
+#else
 #define APP_AREA_END        0x71000u                        /* = the VM start both directories declare */
+#endif
 #define APP_AREA_MAX        (APP_AREA_END - APP_DIR)
 #define APP_ENTRY           (SFC_CPU_BASE + APP_DIR - SFC_FLASH_BASE + 0x120)
 #define SECTOR_SIZE         0x1000u
@@ -49,11 +56,20 @@ struct boot_diag {
 #define BOOT_COUNT_CHECK    0x5A5AB007u
 #define BOOT_CRASH_LIMIT    3u          /* the 4th boot in a row that was never confirmed: DFU */
 
+#ifdef BOARD_SMC_MIXER
+/* Held at power-up: stay in the bootloader. Key codes (column << 4 | sense row PB0..PB3) of the
+ * mixer's matrix (docs/mixer-hardware.md): play = 0x53; shift is 0x71 or 0x81 (the two oval
+ * buttons, which one is which is not confirmed yet), so either of them + play counts. */
+#define DFU_KEY_PLAY        0x53u
+#define DFU_KEY_SHIFT_A     0x71u
+#define DFU_KEY_SHIFT_B     0x81u
+#else
 /* Held at power-up: stay in the bootloader. Columns of the key matrix, sense line 1 (PC1):
  * 0 shift, 1 note repeat, 2 bluetooth, 3 pad bank, 4 knob bank, 5 left, 6 right, 7 play,
  * 8 rec, 9 pause (docs/hardware.md). */
 #define DFU_KEY_COL_A       0u          /* shift */
 #define DFU_KEY_COL_B       7u          /* play */
+#endif
 
 /* Why the DFU mode runs. */
 #define DFU_REASON_MAGIC    1u          /* asked for by the application (B, 1200-baud touch) */
@@ -97,13 +113,20 @@ struct boot_diag {
  * installer can put a vendor firmware back. All of 0x41000..0x68000 is blank stock VM space. */
 #define STAGE_END           0x68000u
 #define DEST_ERASE_STOCK    0x24000u            /* from the stock firmware: all of it goes */
+/* Stock packages (erase_end = DEST_ERASE_STOCK) may carry one more sector after the stock app
+ * area: the first VM sector (0x24000, plaintext), so going back to stock restores the stock
+ * VM byte for byte. The installer encrypts only below DEST_ERASE_STOCK, and on a stock install
+ * erases the rest of the stock VM (DEST_ERASE_STOCK..VM_END, minus the slot and staging area,
+ * which it erases at the end anyway): our application and VM are in there. */
+#define STOCK_VM_EXTRA      0x1000u
 #else
+#define STOCK_VM_EXTRA      0u
 #define STAGE_END           0x4D000u
 #define DEST_ERASE_STOCK    0x26000u            /* from the stock firmware: all of it goes */
 #endif
 /* The payload must fit in what gets erased for it: the stock area or, for a bootloader
  * update, 0x1000..APP_DIR (the old DEST_MAX). */
-#define DEST_MAX(erase_end) ((erase_end) - DEST)
+#define DEST_MAX(erase_end) ((erase_end) - DEST + ((erase_end) == DEST_ERASE_STOCK ? STOCK_VM_EXTRA : 0))
 
 struct stage_header {
     u32 magic;

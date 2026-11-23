@@ -152,7 +152,12 @@ static void boot_pkg_manifest(void)
         fail(0x312, DFU_STATUS_ERR_VERIFY);         /* not an installer for the slot */
         return;
     }
+#ifdef BOARD_SMC_MIXER
+    /* also a stock firmware package (host/bootpkg.py --to-stock): going back to stock */
+    if (stage_check(&h) || (h.erase_end != DEST_ERASE_UPDATE && h.erase_end != DEST_ERASE_STOCK)) {
+#else
     if (stage_check(&h) || h.erase_end != DEST_ERASE_UPDATE) {
+#endif
         fail(0x313, DFU_STATUS_ERR_VERIFY);         /* no good bootloader in it, or a stock install */
         return;
     }
@@ -316,6 +321,65 @@ void tud_mount_cb(void)
 
 /* ------------------------------------------------------------------------------- main */
 
+#ifdef BOARD_SMC_MIXER
+/* An LED blinks while the bootloader waits (docs/mixer-hardware.md). The mixer's LEDs hang off
+ * the 74HC595 chain that also scans the keys: 32 bits, shifted out a byte at a time MSB first
+ * on PB7 (data) / PB6 (clock), latched by PB4, outputs enabled by PB5 low; the low 16 bits are
+ * the LED segments (active low), the high 16 the key columns (all high here: no column
+ * selected). The LED commons are PA2, PA5, PC1, PC3 (phases 0..3, active low). LED index 32 --
+ * very likely PLAY -- is phase 0 (PA2), segment 12. Only these pins are touched: PA0, PA1,
+ * PA3, PA4, PA6, PC2, PC4, PC5 are the faders and must never be driven. */
+#define PORTA(o)            REG32(0x1E5000u + (o))
+#define PORTB(o)            REG32(0x1E5040u + (o))
+#define PORTC(o)            REG32(0x1E5080u + (o))
+#define SR_PINS             ((1u << 4) | (1u << 5) | (1u << 6) | (1u << 7))
+#define COM_A_PINS          ((1u << 2) | (1u << 5))
+#define COM_C_PINS          ((1u << 1) | (1u << 3))
+#define LED_PHASE_PA        (1u << 2)
+#define LED_SEGMENT         12u
+
+static void sr_shift32(u32 v)
+{
+    for (int byte = 0; byte < 4; byte++) {
+        u32 b = (v >> (8 * byte)) & 0xFF;
+
+        for (int bit = 7; bit >= 0; bit--) {
+            PORTB(0x00) = (PORTB(0x00) & ~(1u << 7)) | ((b >> bit) & 1) << 7;
+            PORTB(0x00) &= ~(1u << 6);
+            PORTB(0x00) |= 1u << 6;
+        }
+    }
+    PORTB(0x00) &= ~(1u << 6);
+    PORTB(0x00) |= 1u << 4;                 /* latch */
+    PORTB(0x00) &= ~(1u << 4);
+}
+
+static void led_init(void)
+{
+    PORTA(0x10) &= ~COM_A_PINS;             /* no pulls */
+    PORTA(0x14) &= ~COM_A_PINS;
+    PORTC(0x10) &= ~COM_C_PINS;
+    PORTC(0x14) &= ~COM_C_PINS;
+    PORTA(0x00) |= COM_A_PINS;              /* all phases off */
+    PORTC(0x00) |= COM_C_PINS;
+    PORTA(0x08) &= ~COM_A_PINS;
+    PORTC(0x08) &= ~COM_C_PINS;
+    PORTB(0x10) &= ~SR_PINS;
+    PORTB(0x14) &= ~SR_PINS;
+    PORTB(0x00) &= ~SR_PINS;                /* /OE low: 595 outputs on */
+    PORTB(0x08) &= ~SR_PINS;
+    sr_shift32(0xFFFFFFFFu & ~(1u << LED_SEGMENT));     /* the one segment sinks, no column */
+}
+
+static void led_set(int on)
+{
+    if (on) {
+        PORTA(0x00) &= ~LED_PHASE_PA;
+    } else {
+        PORTA(0x00) |= LED_PHASE_PA;
+    }
+}
+#else
 /* The SHIFT button's LED blinks while the bootloader waits (docs/hardware.md, button LEDs: a
  * 3x4 multiplex, phases PA3/PC2/PC3 and segments PA5/PA2/PA0/PA1, all active low; SHIFT is
  * phase 0 = PA3, segment 2 = PA0). */
@@ -345,6 +409,7 @@ static void led_set(int on)
         PORTA(0x00) |= 1u << 3;
     }
 }
+#endif
 
 static __attribute__((noreturn)) void reboot(void)
 {
