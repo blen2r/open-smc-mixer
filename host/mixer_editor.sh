@@ -4,7 +4,16 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${PORT:-8770}"
-python3 -m http.server "$PORT" --bind 127.0.0.1 -d "$ROOT/editor" >/dev/null 2>&1 &
+# no caching: an updated editor is picked up by a plain reload
+python3 - "$PORT" "$ROOT/editor" >/dev/null 2>&1 <<'PY' &
+import functools, http.server, sys
+class H(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])),
+                                functools.partial(H, directory=sys.argv[2])).serve_forever()
+PY
 SERVER=$!
 trap 'kill $SERVER' EXIT
 sleep 0.5
