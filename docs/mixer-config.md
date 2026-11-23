@@ -82,7 +82,7 @@ Mode kept across power cycles; the change is shown with an LED pattern (TBD).
 
 - 8 pages, current page kept across power cycles.
 - Shift + Fast-forward: page + 1, Shift + Rewind: page - 1 (no wrap-around -- TBD).
-  (Stock Shift + Rewind / FF send the same as Rewind / FF, so no stock behaviour is lost.)
+  (Stock Shift + Rewind / FF most likely send the same as Rewind / FF, as Shift + Up / Down do -- TBD.)
 - On a page change the fader LED `Lp` **blinks fast** for ~1 s with the other fader LEDs off,
   then the LEDs go back to what they showed (mismatch lights, button LEDs of the new page).
   Blinking is free for this because our mismatch light is solid.
