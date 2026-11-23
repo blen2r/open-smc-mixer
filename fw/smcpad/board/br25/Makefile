@@ -302,6 +302,7 @@ c_SRC_FILES := \
 	../../../../apps/smcpad/arduino/smcmixer_hw.c \
 	../../../../apps/smcpad/examples/mixer/mixer_app.c \
 	../../../../apps/smcpad/examples/mixer/mixer_blemidi.c \
+	../../../../apps/smcpad/examples/mixer/mixer_config.c \
 	../../../../apps/smcpad/arduino/smcpad_ble.c \
 	../../../../apps/smcpad/arduino/smcpad_arduino.c \
 	../../../../apps/smcpad/examples/keyboard/app_keyboard.c \
