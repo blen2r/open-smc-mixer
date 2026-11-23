@@ -136,6 +136,27 @@ Strip *n* = OP-XY track / channel *n* (a second page could cover tracks 9-16).
 | Rec *n* | **focus group A**: knobs 1-4 send CC 12-15 on channel *n*. One strip at a time (Rec on another strip moves it); LED lit while focused; pressing it again goes back to the default mappings |
 | Select *n* | **focus group B**: same for knobs 5-8 |
 
+### Values coming back (implemented, 2026-11-22)
+
+A CC / pitch bend / channel pressure the mixer **receives** (BLE or USB) becomes that control's
+known value: a fader on it has to pick it up again and its LED shows the mismatch; a knob
+continues from it. Input never triggers output (no loops); a value we are sending on that very
+control right now (within 1.5 s, inside the range we just sent) is taken as our own echo and
+ignored. The values are also kept across power cycles (saved ~5 s after the last change).
+
+- Editor: **"follow incoming values"** on / off (global; per mapping later if needed).
+
+### Sync with the OP-XY (later; the user runs a custom OP-XY firmware)
+
+The user will add to the OP-XY: answer a request for all current values, and send them by
+itself on pairing, program change and project change. On the mixer side:
+
+- a request on connect (and from a button combo / the editor): SysEx in our protocol, e.g.
+  `F0 7D 4D 20 F7` ("send me your values") -- final bytes TBD with the OP-XY side;
+- the answer can simply be the ordinary CCs (volume, mute, pan, CC 12-15 per track): they go
+  through "values coming back" above, so pickup and the LEDs follow;
+- mute state should follow too (CC 9 in sets the Mute LED) -- TBD with solo-by-muting.
+
 ### Fader special modes (Shift + strip button), toggles, LED blinks while active
 
 | combo | fader *n* then sends (channel *n*) |

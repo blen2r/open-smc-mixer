@@ -49,9 +49,28 @@ static u8 pb_val[16], at_val[16];
 static u8 knob_val[16][4];                          /* CC 12..15 */
 /* when each fader / knob slot last sent (ms): incoming values for a control we are sending on
  * right now are our own echo (a device with MIDI thru), not news */
-#define ECHO_MS         500
-static u32 fader_sent_at[NUM_STRIPS];
-static u32 knob_sent_at[16][4];
+#define ECHO_MS         1500
+typedef struct { u32 at; u8 lo, hi; } echo_t;   /* when, and the range of values sent since */
+static echo_t fader_echo[NUM_STRIPS];
+static echo_t knob_echo[16][4];
+
+static void echo_note(echo_t *e, u8 v)
+{
+    u32 now = smcpad_millis() | 1;
+
+    if (!e->at || now - e->at >= ECHO_MS) {
+        e->lo = e->hi = v;
+    }
+    e->lo = v < e->lo ? v : e->lo;
+    e->hi = v > e->hi ? v : e->hi;
+    e->at = now;
+}
+
+/* a value we sent ourselves on this control, coming back (MIDI thru, BLE latency) */
+static int echo_of(const echo_t *e, u8 v)
+{
+    return e->at && smcpad_millis() - e->at < ECHO_MS && v >= e->lo && v <= e->hi;
+}
 
 /* per fader: what it controls now, and whether it has picked that value up */
 typedef struct { u8 kind, ch, num; } target_t;      /* kind 0 CC, 1 pitch bend, 2 pressure */
@@ -81,10 +100,13 @@ static void midi_send(u8 status, u8 d1, u8 d2)
     mixer_blemidi_send(msg, len);
 }
 
+static void values_changed(void);
+
 static void send_cc(int ch, int num, int v)
 {
     midi_send(0xB0 | (ch & 15), num & 127, v & 127);
     cc_val[ch & 15][num & 127] = (u8)v;
+    values_changed();
 }
 
 /* ------------------------------------------------------------------ mute / solo */
@@ -146,7 +168,7 @@ static void fader_send(int f)
     if (t->kind != 1 && v == target_value(t)) {
         return;                             /* the same value again: nothing to say */
     }
-    fader_sent_at[f] = smcpad_millis() | 1;
+    echo_note(&fader_echo[f], v);
 
     switch (t->kind) {
     case 0:
@@ -157,11 +179,13 @@ static void fader_send(int f)
 
         midi_send(0xE0 | t->ch, b & 127, (b >> 7) & 127);
         pb_val[t->ch] = v;
+        values_changed();
         break;
     }
     default:
         midi_send(0xD0 | t->ch, v, 0);
         at_val[t->ch] = v;
+        values_changed();
         break;
     }
 }
@@ -225,7 +249,7 @@ static void knob_turned(int k, int steps)
     v = v < 0 ? 0 : v > 127 ? 127 : v;
     if (v != knob_val[ch][slot]) {
         knob_val[ch][slot] = (u8)v;
-        knob_sent_at[ch][slot] = smcpad_millis() | 1;
+        echo_note(&knob_echo[ch][slot], (u8)v);
         send_cc(ch, 12 + slot, v);
     }
 }
@@ -351,6 +375,64 @@ static void leds_update(void)
     smcmixer_led_set(SMCMIXER_BTN_BLUETOOTH, mixer_blemidi_connected() ? 1 : blink && (now / 1000) % 3 == 0);
 }
 
+/* ------------------------------------------------------------------ remembered values
+ * The values last sent (or received) for what the faders and knobs control are kept across
+ * power cycles, so pickup works from the first move. Saved a few seconds after the last
+ * change (writing the VM erases flash: not on every move). */
+#define STORE_KEY_VALUES    0
+#define STORE_MAGIC         0x4D585631u     /* "MXV1" */
+#define SAVE_AFTER_MS       5000
+
+typedef struct {
+    u32 magic;
+    u8 vol[16], pan[16], mod[16], pb[16], at[16];
+    u8 knob[16][4];
+} saved_values_t;
+
+static u32 values_dirty_at;
+
+static void values_changed(void)
+{
+    values_dirty_at = smcpad_millis() | 1;
+}
+
+static void values_load(void)
+{
+    saved_values_t v;
+
+    if (smcpad_store_read(STORE_KEY_VALUES, &v, sizeof(v)) != sizeof(v) || v.magic != STORE_MAGIC) {
+        return;
+    }
+    for (int ch = 0; ch < 16; ch++) {
+        cc_val[ch][7] = v.vol[ch];
+        cc_val[ch][10] = v.pan[ch];
+        cc_val[ch][1] = v.mod[ch];
+        pb_val[ch] = v.pb[ch];
+        at_val[ch] = v.at[ch];
+    }
+    memcpy(knob_val, v.knob, sizeof(knob_val));
+}
+
+static void values_save_if_due(void)
+{
+    saved_values_t v;
+
+    if (!values_dirty_at || smcpad_millis() - values_dirty_at < SAVE_AFTER_MS) {
+        return;
+    }
+    values_dirty_at = 0;
+    v.magic = STORE_MAGIC;
+    for (int ch = 0; ch < 16; ch++) {
+        v.vol[ch] = cc_val[ch][7];
+        v.pan[ch] = cc_val[ch][10];
+        v.mod[ch] = cc_val[ch][1];
+        v.pb[ch] = pb_val[ch];
+        v.at[ch] = at_val[ch];
+    }
+    memcpy(v.knob, knob_val, sizeof(knob_val));
+    smcpad_store_write(STORE_KEY_VALUES, &v, sizeof(v));
+}
+
 /* ------------------------------------------------------------------ MIDI in
  * A CC from the other side (the OP-XY echoing a change made on it, a DAW's feedback) becomes
  * the known value of that control: a fader on it has to pick it up again, and its LED shows
@@ -367,13 +449,15 @@ static void midi_in(u8 status, u8 d1, u8 d2)
     u32 now = smcpad_millis();
 
     /* our own echo? (never answered in any case: input only updates what we know) */
+    u8 val = type == 0xD0 ? d1 & 127 : d2 & 127;
+
+    (void)now;
     for (int f = 0; f < NUM_STRIPS; f++) {
-        if (fader_sent_at[f] && now - fader_sent_at[f] < ECHO_MS && is_target(&fader_target[f], type, ch, d1 & 127)) {
+        if (is_target(&fader_target[f], type, ch, d1 & 127) && echo_of(&fader_echo[f], val)) {
             return;
         }
     }
-    if (type == 0xB0 && d1 >= 12 && d1 <= 15 && knob_sent_at[ch][d1 - 12] &&
-        now - knob_sent_at[ch][d1 - 12] < ECHO_MS) {
+    if (type == 0xB0 && d1 >= 12 && d1 <= 15 && echo_of(&knob_echo[ch][d1 - 12], val)) {
         return;
     }
     if (type == 0xB0) {
@@ -388,6 +472,7 @@ static void midi_in(u8 status, u8 d1, u8 d2)
     } else {
         return;
     }
+    values_changed();
     for (int f = 0; f < NUM_STRIPS; f++) {
         target_t *t = &fader_target[f];
         u8 v = target_value(t);
@@ -450,6 +535,7 @@ void mixer_app_run(void)
     memset(pb_val, UNKNOWN, sizeof(pb_val));
     memset(at_val, UNKNOWN, sizeof(at_val));
     memset(knob_val, 64, sizeof(knob_val));
+    values_load();
     for (int f = 0; f < NUM_STRIPS; f++) {
         fader_target[f].kind = 0xFF;        /* forces the first retarget */
     }
@@ -490,6 +576,7 @@ void mixer_app_run(void)
             boot_combo_since = 0;
         }
         leds_update();
+        values_save_if_due();
         mixer_blemidi_poll();
         smcpad_usbmidi_flush();
         smcpad_yield();                     /* USB, the 1200-baud touch, the boot counter; the
