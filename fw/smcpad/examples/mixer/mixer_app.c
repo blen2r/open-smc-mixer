@@ -33,6 +33,15 @@
 
 enum { FM_VOLUME, FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN, FM_COUNT };
 
+/* A timestamp that is never 0 (0 = "never"). Not `millis() | 1`: that can be 1 ms in the
+ * future, and `now - stamp` then wraps to ~4e9 -- every "within N ms" test fails. */
+static u32 stamp(void)
+{
+    u32 t = smcpad_millis();
+
+    return t ? t : 1;
+}
+
 /* ------------------------------------------------------------------ state */
 
 static u8 page;                                     /* 0..NUM_PAGES-1 */
@@ -56,7 +65,7 @@ static echo_t knob_echo[16][4];
 
 static void echo_note(echo_t *e, u8 v)
 {
-    u32 now = smcpad_millis() | 1;
+    u32 now = stamp();
 
     if (!e->at || now - e->at >= ECHO_MS) {
         e->lo = e->hi = v;
@@ -297,7 +306,7 @@ static void set_page(int p)
         return;
     }
     page = (u8)p;
-    page_shown_at = smcpad_millis() | 1;
+    page_shown_at = stamp();
     faders_retarget_all();
 }
 
@@ -393,7 +402,7 @@ static u32 values_dirty_at;
 
 static void values_changed(void)
 {
-    values_dirty_at = smcpad_millis() | 1;
+    values_dirty_at = stamp();
 }
 
 static void values_load(void)
@@ -443,6 +452,14 @@ static int is_target(const target_t *t, u8 type, u8 ch, u8 num)
                            (type == 0xE0 && t->kind == 1) || (type == 0xD0 && t->kind == 2));
 }
 
+/* diagnostics (SysEx F0 7D 4D 71 F7 -> reply): incoming values accepted on a knob that sent
+ * within the last 2 s, with what the echo check saw */
+static struct {
+    u32 n_in, n_echo, n_accept;
+    struct { u8 ch, num, v, lo, hi; u32 age, now; } last[6];
+    u8 pos;
+} dbg;
+
 static void midi_in(u8 status, u8 d1, u8 d2)
 {
     u8 type = status & 0xF0, ch = status & 0x0F;
@@ -457,8 +474,19 @@ static void midi_in(u8 status, u8 d1, u8 d2)
             return;
         }
     }
+    dbg.n_in++;
     if (type == 0xB0 && d1 >= 12 && d1 <= 15 && echo_of(&knob_echo[ch][d1 - 12], val)) {
+        dbg.n_echo++;
         return;
+    }
+    if (type == 0xB0 && d1 >= 12 && d1 <= 15 && knob_echo[ch][d1 - 12].at) {
+        echo_t *e = &knob_echo[ch][d1 - 12];
+        u32 i = dbg.pos++ % 6;
+
+        dbg.n_accept++;
+        dbg.last[i].ch = ch; dbg.last[i].num = d1; dbg.last[i].v = val;
+        dbg.last[i].lo = e->lo; dbg.last[i].hi = e->hi;
+        dbg.last[i].age = smcpad_millis() - e->at; dbg.last[i].now = smcpad_millis();
     }
     if (type == 0xB0) {
         cc_val[ch][d1 & 127] = d2 & 127;
@@ -489,9 +517,48 @@ static void midi_in(u8 status, u8 d1, u8 d2)
 static u8 sysex[32];
 static u32 sysex_len;
 
+static void sysex_send(const u8 *d, u32 n)        /* whole message, F0 .. F7, USB only */
+{
+    for (u32 i = 0; i < n; i += 3) {
+        u32 left = n - i;
+        u8 pkt[4] = { 0x04, d[i], left > 1 ? d[i + 1] : 0, left > 2 ? d[i + 2] : 0 };
+
+        if (left <= 3) {
+            pkt[0] = (u8)(0x04 + left);     /* CIN 5 / 6 / 7: ends with 1 / 2 / 3 bytes */
+        }
+        smcpad_usbmidi_write(pkt);
+    }
+}
+
+static void dbg_reply(void)
+{
+    u8 b[128], *p = b;
+
+    *p++ = 0xF0; *p++ = 0x7D; *p++ = 0x4D; *p++ = 0x71;
+    for (int k = 0; k < 3; k++) {                   /* counters, 14 bits each */
+        u32 v = k == 0 ? dbg.n_in : k == 1 ? dbg.n_echo : dbg.n_accept;
+        *p++ = (v >> 7) & 127; *p++ = v & 127;
+    }
+    for (int i = 0; i < 6; i++) {
+        *p++ = dbg.last[i].ch; *p++ = dbg.last[i].num; *p++ = dbg.last[i].v;
+        *p++ = dbg.last[i].lo & 127; *p++ = dbg.last[i].hi & 127;
+        *p++ = (dbg.last[i].age >> 14) & 127; *p++ = (dbg.last[i].age >> 7) & 127; *p++ = dbg.last[i].age & 127;
+        *p++ = (dbg.last[i].now >> 21) & 127; *p++ = (dbg.last[i].now >> 14) & 127;
+        *p++ = (dbg.last[i].now >> 7) & 127; *p++ = dbg.last[i].now & 127;
+    }
+    *p++ = 0xF7;
+    sysex_send(b, p - b);
+}
+
 static void sysex_done(void)
 {
     static const u8 enter_boot[] = { 0xF0, 0x7D, 0x4D, 0x70, 0xF7 };
+    static const u8 get_dbg[] = { 0xF0, 0x7D, 0x4D, 0x71, 0xF7 };
+
+    if (sysex_len == sizeof(get_dbg) && !memcmp(sysex, get_dbg, sizeof(get_dbg))) {
+        dbg_reply();
+        return;
+    }
 
     if (sysex_len == sizeof(enter_boot) && !memcmp(sysex, enter_boot, sizeof(enter_boot))) {
         smcpad_enter_bootloader();
@@ -568,7 +635,7 @@ void mixer_app_run(void)
         if (smcmixer_button(SMCMIXER_BTN_SHIFT) && smcmixer_button(SMCMIXER_BTN_BLUETOOTH) &&
             smcmixer_button(SMCMIXER_BTN_PLAY)) {
             if (!boot_combo_since) {
-                boot_combo_since = smcpad_millis() | 1;
+                boot_combo_since = stamp();
             } else if (smcpad_millis() - boot_combo_since > 2000) {
                 smcpad_enter_bootloader();
             }
