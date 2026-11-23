@@ -118,23 +118,31 @@ The page-change blink (above) uses the same LEDs and takes priority for its ~1 s
 
 ### Step-sequencer pages (later)
 
-Idea from the user (2026-11-22, reference: "Take a look inside Richie Hawtin's DJ setup", Native
-Instruments, YouTube `g7Wvq8PN-84`, around 8:00 -- not watched yet, details to confirm): any of the 8
-pages can be a **step sequencer** instead of a mapping page, each with its own MIDI channel(s).
+Idea from the user (2026-11-22, inspired by "Take a look inside Richie Hawtin's DJ setup", Native
+Instruments, YouTube `g7Wvq8PN-84`, around 8:00). Kept simple: any of the 8 pages can be a
+**step sequencer** instead of a mapping page, with its own MIDI channel.
 
-Sketch, all TBD:
+- Page type `mapping` (default) | `sequencer`; a sequencer page has an output channel.
+- **8 steps, one per strip:**
+  - **Mute** button of strip *n*: step *n* on / off (its LED shows it);
+  - **fader** *n*: the note step *n* plays.
+- **Step parameters on the same faders while a button row is held:**
+  - hold **Solo** + move the fader: velocity;
+  - hold **Rec** + move the fader: length (gate);
+  - hold **Select** + move the fader: probability.
+- The faders are not motorized, so every view (note / velocity / length / probability) reuses the
+  **fader mismatch LED** (solid while the fader is not at the step's stored value, off once it is)
+  and the **pickup** behaviour: a fader only changes a value after it has reached it, so switching
+  views or pages never overwrites values by accident.
+- Sequences keep running while another page is shown, so several sequencer pages can play at once
+  on different channels.
+- Clock: MIDI clock from the host over USB (follows the DAW's tempo and start / stop).
 
-- Page type `mapping` (default) | `sequencer`. A sequencer page has its own output channel, and
-  possibly one channel / note per row.
-- The 8 x 4 track buttons are the grid: e.g. 4 rows (instruments / notes) x 8 steps, or one row of
-  32 steps; button LEDs show the steps that are set, the playing step runs across as a moving light.
-- Faders / knobs per step or per row: velocity, note, gate length, probability (TBD).
-- Clock: MIDI clock from the host over USB (follows the DAW's tempo and start/stop); maybe an
-  internal clock as a fallback.
-- Sequences keep running while another page is shown, so several pages can play at once on
-  different channels.
-- Storage: patterns next to the config (their own flash sectors), edited on the device and in the
-  web editor.
+TBD: does holding *any* Solo (Rec, Select) switch all 8 faders to that parameter, or only that
+strip's button for that strip's fader (the first lets you set several steps at once); note range
+of a fader (all 128 notes, or a range / scale); how the playing step is shown (e.g. a moving LED
+on the Rec or Select row); what the knobs do on a sequencer page (pass through to the mapping,
+or per-step extras); pattern length other than 8 (e.g. chaining two pages).
 
 ## Mapping
 
