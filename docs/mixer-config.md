@@ -118,7 +118,8 @@ The page-change blink (above) uses the same LEDs and takes priority for its ~1 s
 
 ## OP-XY profile (the user's main use, 2026-11-22)
 
-The mixer drives a Teenage Engineering OP-XY **over Bluetooth MIDI**; one MIDI channel per OP-XY
+The mixer drives a Teenage Engineering OP-XY **over Bluetooth MIDI** (the OP-XY scans and connects:
+the mixer is the BLE peripheral, as the stock firmware); one MIDI channel per OP-XY
 track (16). Official OP-XY CC table (guide section 23, "midi cc reference table"): track volume
 CC 7, track mute CC 9, track pan CC 10, all on channels 1-16; no solo CC. The user uses CC 12-15
 for a track's 4 parameters (the table itself lists "track parameters" as CC 46 -- to check).
@@ -144,6 +145,14 @@ Strip *n* = OP-XY track / channel *n* (a second page could cover tracks 9-16).
 | Shift + Rec | suggestion: channel pressure (aftertouch) |
 | Shift + Select | suggestion: pan (CC 10, latched) |
 | Shift + move a fader (no button) | suggestion: pan (CC 10) while Shift is held, momentary |
+
+Shift + fader can also be mapped **per fader** in the editor, like a macro control: e.g. Shift +
+fader 1 = CC 13 on channel 12 (a parameter of track 12 at hand from any strip). A per-fader Shift
+mapping replaces the momentary-pan default for that fader only.
+
+**"Applies to all pages"** (editor toggle on any mapping): stores it in the *all pages* layer
+(layer 0, see the resolution order) instead of the current page, so a macro set once works on
+every page; a page can still override it.
 
 Pressing the same combo again returns the fader to normal (volume). Each mode keeps its own
 value for pickup / mismatch LED.
