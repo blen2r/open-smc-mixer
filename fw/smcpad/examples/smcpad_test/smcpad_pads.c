@@ -14,6 +14,8 @@
  * Stock tables, used as the hypothesis the wizard checks (flash 0x17CF0 / 0x17D00 of the dump):
  *   ADC position -> stock pad index, stock pad index -> LED chain index.
  */
+#include "smcpad_usb_cfg.h"
+#if !SMC_MIXER                              /* the pad's console */
 #include "system/includes.h"
 #include "asm/gpio.h"
 #include "asm/adc_api.h"
@@ -379,3 +381,5 @@ void smcpad_cmd_pads_midi(void)
     led_all(0);
     led_show();
 }
+
+#endif /* !SMC_MIXER */

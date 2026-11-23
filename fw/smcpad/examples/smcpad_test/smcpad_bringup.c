@@ -26,6 +26,8 @@
  * visible effect (one pin at a time, so no LED string can be over-driven); if a pin wedges
  * the chip, the port disappears from the host and the last line printed names the culprit.
  */
+#include "smcpad_usb_cfg.h"
+#if !SMC_MIXER                              /* the pad's console */
 #include "system/includes.h"
 #include "asm/gpio.h"
 #include "asm/hwi.h"                     /* bit_clr_ie, IRQ_USB_*_IDX */
@@ -2119,3 +2121,5 @@ void smcpad_bringup_start(void)
         }
     }
 }
+
+#endif /* !SMC_MIXER */

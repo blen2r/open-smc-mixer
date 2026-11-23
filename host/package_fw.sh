@@ -7,6 +7,7 @@
 #                               # (fw/smcpad built with TEXT_BASE=0x1E08120)
 #   BOARD=mixer host/package_fw.sh bootonly   # the mixer's bootloader area + update package
 #   BOARD=mixer host/package_fw.sh probe      # fw/mixer_probe as the application (DFU alt 0)
+#   BOARD=mixer host/package_fw.sh mixerapp   # the mixer firmware (fw/smcpad, BOARD=mixer)
 #
 # Produces, in work/flash/:
 #   fw_area.bin          the app area as the CPU sees it (plaintext; the application's in
@@ -50,6 +51,14 @@ case "$MODE" in
         python3 host/bootpkg.py --board "$BOARD"   # $FLASH/boot_update.bin (DFU alt 2)
         exit 0
         ;;
+    mixerapp)
+        # the mixer firmware (BOARD=mixer SMCPAD_TINYUSB=1 TEXT_BASE=0x1E08120 fw/build.sh) as the
+        # application at 0x9000, for DFU alt 0
+        [ "$BOARD" = mixer ] || { echo "mixerapp: BOARD=mixer only" >&2; exit 2; }
+        python3 host/jlimage.py build --app fw/smcpad/out/app.bin --area-base $APP_DIR $VM \
+            $TEMPLATE --out $FLASH/mixer_area.bin
+        exit 0
+        ;;
     probe)
         # the mixer probe (fw/mixer_probe) as the application at 0x9000, for DFU alt 0
         [ "$BOARD" = mixer ] || { echo "probe: BOARD=mixer only" >&2; exit 2; }
@@ -76,7 +85,7 @@ print(f"bootloader {0x1000:#x}..{0x1000 + len(boot):#x}, application {app_dir:#x
 EOF
         python3 host/bootpkg.py                     # work/flash/boot_update.bin (DFU alt 2)
         ;;
-    *)  echo "usage: [BOARD=pad|mixer] $0 [solo|boot|bootonly|probe]" >&2; exit 2 ;;
+    *)  echo "usage: [BOARD=pad|mixer] $0 [solo|boot|bootonly|probe|mixerapp]" >&2; exit 2 ;;
 esac
 
 python3 - <<'EOF'

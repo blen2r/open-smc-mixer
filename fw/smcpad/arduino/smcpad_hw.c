@@ -16,6 +16,8 @@
  *   with a velocity; below the off threshold -> note off; in between the value is the pressure.
  * Pad RGB LEDs: WS2812-style chain on PB1 from SPI1 by DMA (frame as the stock firmware sends it).
  */
+#include "smcpad_usb_cfg.h"
+#if !SMC_MIXER                              /* the mixer: smcmixer_hw.c */
 #include "system/includes.h"
 #include "asm/gpio.h"
 #include "asm/hwi.h"
@@ -556,3 +558,5 @@ void smcpad_hw_begin(void)
     mux_select(0);
     adc_start(0);
 }
+
+#endif /* !SMC_MIXER */

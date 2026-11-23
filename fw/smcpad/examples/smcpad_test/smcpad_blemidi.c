@@ -13,6 +13,8 @@
  * The stack, the CCC and advertising are the runtime's (fw/smcpad/arduino/smcpad_ble.c); this
  * file gives it the profile and handles the MIDI characteristic.
  */
+#include "smcpad_usb_cfg.h"
+#if !SMC_MIXER                              /* the pad's console */
 #include "system/app_core.h"
 #include "system/includes.h"
 #include "app_config.h"
@@ -264,3 +266,5 @@ int blemidi_send(const u8 *msg, u32 len)
 }
 
 #endif
+
+#endif /* !SMC_MIXER */

@@ -27,7 +27,10 @@ extern void smcpad_trace(const char *tag);
 
 static void console_task(void *priv)
 {
-#if SMCPAD_ARDUINO
+#if SMC_MIXER
+    extern void mixer_app_run(void);
+    mixer_app_run();                        /* examples/mixer: never returns */
+#elif SMCPAD_ARDUINO
     extern void smcpad_arduino_run(void);
     smcpad_arduino_run();                   /* setup(), loop() forever */
 #else

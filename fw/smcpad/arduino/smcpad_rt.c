@@ -149,8 +149,15 @@ int smcpad_store_write(int key, const void *buf, int len)
  * off, every wait bounded, retried): the SDK's norflash_write / norflash_read never return
  * here. Reads are plain reads of the mapped flash (CPU 0x1E00000 = flash 0x1000), which the
  * driver keeps coherent (it drops the SFC cache after each operation). */
+#if SMC_MIXER
+/* the mixer: 0x77000 is its VM (fw/boot/boot.h), its USRFLASH (0x7D000) holds the stock
+ * firmware's settings: no raw area for now */
+#define USRFLASH_BEGIN  0u
+#define USRFLASH_END    0u
+#else
 #define USRFLASH_BEGIN  0x77000u
 #define USRFLASH_END    0x7E000u
+#endif
 #define FLASH_ATTEMPTS  3
 
 extern int smcpad_flash_erase_sector(u32 addr, int attempts);

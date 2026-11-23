@@ -1,6 +1,7 @@
 /* USB descriptors for the TinyUSB build: CDC ACM (console / Arduino Serial) + USB-MIDI.
  * Keep them stable: macOS treats a device whose descriptors change as a new accessory to approve
  * (docs/bootloader.md). */
+#include "smcpad_usb_cfg.h"
 #include "tusb.h"
 
 #if SMCPAD_TINYUSB
@@ -57,10 +58,17 @@ const uint8_t *tud_descriptor_configuration_cb(uint8_t index)
 static const char *const strings[] = {
     NULL,
     "open_smc_pad",
+#if SMC_MIXER
+    "SMC-Mixer open fw",
+    "0001",
+    "SMC-Mixer console",
+    "SMC-Mixer MIDI",
+#else
     "SMC-PAD open fw",
     "0001",
     "SMC-PAD console",
     "SMC-PAD MIDI",
+#endif
 };
 
 const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid)

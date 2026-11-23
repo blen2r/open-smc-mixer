@@ -10,6 +10,11 @@
 #ifndef SMCPAD_ARDUINO
 #define SMCPAD_ARDUINO 0
 #endif
+/* 1: the SMC-Mixer (fw/build.sh BOARD=mixer): its hardware service (arduino/smcmixer_hw.c) and
+ * application (examples/mixer) instead of the pad's. */
+#ifndef SMC_MIXER
+#define SMC_MIXER 0
+#endif
 /* Flash offset of our app area's directory (0x1000, or 0x9000 behind the bootloader). */
 #ifndef SMCPAD_APP_DIR
 #define SMCPAD_APP_DIR 0x1000
