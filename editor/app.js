@@ -516,10 +516,35 @@ function onEvent(control, value, page, shift) {
 
 // ------------------------------------------------------------------ connection
 
+function updateConnectButton() {
+  const usb = state.link instanceof WebMidiLink;
+  $('#btnConnect').textContent = usb ? 'Disconnect (USB)' : 'Connect (USB)';
+  $('#btnConnect').classList.toggle('primary', !usb);
+}
+
+// Back to "not connected": the link closed, the configuration dropped (after asking, if unsaved).
+function disconnect(ask = true) {
+  if (ask && state.cfg && JSON.stringify(state.cfg) !== state.saved &&
+      !confirm('Unsaved changes: disconnect anyway? (They are lost; Backup… keeps them.)')) return false;
+  if (state.link && state.link.close) state.link.close();
+  state.link = null;
+  state.cfg = null;
+  state.saved = '';
+  state.sel = null;
+  $('#status').textContent = 'not connected';
+  ['#btnReload', '#btnExport', '#btnImport', '#btnFactory'].forEach(s => { $(s).disabled = true; });
+  buildSurface();
+  refreshAll();
+  updateConnectButton();
+  return true;
+}
+
 async function useLink(link) {
   if (state.link && state.link.close) state.link.close();
   state.link = link;
+  updateConnectButton();
   link.onEvent = onEvent;
+  link.onLost = () => { disconnect(false); toast('the mixer went away (unplugged or updating): Connect again', true); };
   link.onMidi = b => monitor('  ' + describeMidi(b));
   try {
     const h = await link.hello();
@@ -537,6 +562,10 @@ async function useLink(link) {
 }
 
 $('#btnConnect').onclick = async () => {
+  if (state.link instanceof WebMidiLink) {
+    if (disconnect()) toast('disconnected: the mixer\'s USB port is free for other tools');
+    return;
+  }
   try { await useLink(await WebMidiLink.open()); } catch (e) { toast(e.message, true); }
 };
 $('#btnSim').onclick = () => useLink(new SimulatedLink());

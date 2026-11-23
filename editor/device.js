@@ -94,11 +94,21 @@ class WebMidiLink extends MixerLink {
     link.output = output;
     link.name = `${input.name} (USB)`;
     input.onmidimessage = e => link.handle(Array.from(e.data));
+    // unplugged, or rebooting into the bootloader for an update
+    access.onstatechange = e => {
+      if ((e.port.id === input.id || e.port.id === output.id) && e.port.state === 'disconnected' && link.onLost) link.onLost();
+    };
+    link.access = access;
     return link;
   }
 
   send(bytes) { this.output.send(bytes); }
-  close() { this.input.onmidimessage = null; }
+  close() {
+    // release the ports, so other tools (host/mixer_update.sh) can open them directly
+    this.input.onmidimessage = null;
+    this.access.onstatechange = null;
+    try { this.input.close(); this.output.close(); } catch (e) { /* already gone */ }
+  }
 }
 
 // A mixer in the browser: the same protocol, a configuration in memory, and a few moving
@@ -127,7 +137,7 @@ class SimulatedLink extends MixerLink {
     switch (cmd) {
       case 0x01: {
         const l = this.active.length;
-        this.reply(seq, 0, [3, 0, CFG.VERSION, 0, CFG.MAX_BYTES & 0xFF, CFG.MAX_BYTES >> 8, 61, 8, 1, l & 0xFF, l >> 8, this.active[8]]);
+        this.reply(seq, 0, [4, 0, CFG.VERSION, 0, CFG.MAX_BYTES & 0xFF, CFG.MAX_BYTES >> 8, 61, 8, 1, l & 0xFF, l >> 8, this.active[8]]);
         break;
       }
       case 0x02: this.reply(seq, 0, Array.from(this.active.slice(u16(0), u16(0) + d[2]))); break;
