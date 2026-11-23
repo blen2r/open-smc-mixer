@@ -68,12 +68,13 @@
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; display: none; z-index: 10; }
   .toast.show { display: block; }
   .toast.err { border-color: var(--bad); color: var(--bad); }
-  .tb { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .tb label { font-size: 12px; color: var(--muted); }
-  .tb input { width: 100%; }
-  .fg { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
-  .fg label { font-size: 11px; color: var(--muted); text-align: center; }
-  .fg input { width: 100%; padding-left: 2px; padding-right: 2px; text-align: center; }
+  .tb { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .tb label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; min-width: 0; }
+  .tb input { width: 100%; min-width: 0; }
+  .fg { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; margin-bottom: 6px; }
+  .fg label { font-size: 11px; color: var(--muted); text-align: center; display: flex; flex-direction: column; min-width: 0; }
+  .fg input { width: 100%; min-width: 0; padding-left: 2px; padding-right: 2px; text-align: center; }
+  .flabel { color: var(--muted); margin: 6px 0 2px; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; width: min(640px, calc(100vw - 32px)); padding: 16px; }
   dialog::backdrop { background: rgba(0,0,0,.55); }
   #pkList { max-height: 60vh; overflow: auto; margin-top: 8px; }
@@ -83,6 +84,12 @@
   .star { border: none; background: none; font-size: 18px; color: var(--muted); padding: 0 4px; }
   .star.on { color: var(--accent); }
   .row input[type=number] { width: 70px; }
+  .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .phead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .phead h2 { margin: 0 6px 0 0; }
+  .phead .src { margin: 0; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 4px 20px; }
+  .pgrid h3 { margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -93,14 +100,16 @@
   <span class="spacer"></span>
   <button id="btnConnect" class="primary">Connect (USB)</button>
   <button id="btnSim">Simulate</button>
-  <button id="btnReload" disabled>Reload</button>
-  <button id="btnSave" class="primary" disabled>Save to mixer</button>
-  <button id="btnExport" disabled>Export</button>
-  <label><button id="btnImport" disabled>Import</button><input type="file" id="fileImport" accept=".json,application/json" hidden></label>
+  <span class="sep"></span>
+  <button id="btnExport" disabled title="Save the whole mixer (both modes, every mapping and setting) to a file">Backup…</button>
+  <label><button id="btnImport" disabled title="Load a backup file here (or a template file, applied as a template); then Save to mixer">Restore…</button><input type="file" id="fileImport" accept=".json,application/json" hidden></label>
+  <button id="btnReload" disabled title="Read the mixer's configuration again (drops unsaved changes)">Reload</button>
   <button id="btnFactory" class="danger" disabled>Factory reset</button>
+  <button id="btnSave" class="primary" disabled>Save to mixer</button>
 </header>
 <main>
   <section>
+    <div class="panel" id="profilePanel"></div>
     <div class="bar">
       <span class="label">Mode</span>
       <span class="seg" id="modes"><button data-mode="daw">DAW</button><button data-mode="cc">CC</button></span>
@@ -115,8 +124,8 @@
     </div>
     <p class="hint">Click a control to edit it on the selected page and layer. <span style="color:var(--accent)">Orange</span>: mapped right here.
       <span style="color:var(--accent2)">Blue</span>: inherited from a broader layer (all pages, or the normal layer).
-      Grey: what the mode does by itself (DAW: the stock Mackie layout; CC: the profile in Settings).
-      Each mode has its own mappings. Resolution: page + Shift → page → all pages + Shift → all pages → the mode.</p>
+      Grey: what the mode does by itself (DAW: the stock Mackie layout; CC: the profile above).
+      Each mode has its own mappings. Hierarchy, the first that has a mapping wins: page + Shift → page → all pages + Shift → all pages → the mode.</p>
   </section>
   <aside>
     <div class="panel" id="editPanel"><h2>Control</h2><p class="hint">Select a control on the mixer drawing.</p></div>

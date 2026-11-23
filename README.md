@@ -113,7 +113,7 @@ to mixer**. **Simulate** works without a mixer. [editor/README.md](editor/README
 ### Templates
 
 A template is CC mode set up for one device, by one person: `OP-XY - blen2r` is the one this
-firmware was made for (the Teenage Engineering OP-XY over Bluetooth). In the editor: Settings →
+firmware was made for (the Teenage Engineering OP-XY over Bluetooth). In the editor: CC mode profile →
 **Choose a template…**. Each template comes with a page saying how it is mapped
 ([editor/templates/opxy-blen2r.md](editor/templates/opxy-blen2r.md)).
 

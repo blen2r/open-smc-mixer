@@ -127,9 +127,9 @@ In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
      a. Click {bold}Encoder 1{off}, change the CC number 20 -> {bold}22{off}.
      b. Click {bold}Strip 4 Mute{off} (marked disabled), click {bold}Remove mapping{off}.
      c. Click {bold}Down{off}: Type CC, channel 1, CC number {bold}52{off}, Button {bold}toggle{off}.
-     d. Settings: {bold}Pages 3{off}.
+     d. CC mode profile card (Show details if hidden): {bold}Pages 3{off}.
      e. Mode bar on {bold}DAW{off}: click {bold}Down{off}: Type CC, channel 1, CC number {bold}71{off} (momentary).
-     f. Settings, Focus groups: in the {bold}Track stop{off} row, box {bold}6{off}: {bold}64{off} (the template name
+     f. Same card, Focus groups: in the {bold}Track stop{off} row, box {bold}6{off}: {bold}64{off} (the template name
         above becomes "custom").
   3. {bold}Save to mixer{off}. (Leave the editor open; you can tick "highlight controls" and watch the
      monitor during the hardware checks.)
@@ -229,6 +229,11 @@ def checks(qa):
         print(f"   {DIM}(sent CC 30 = 64 on ch 6 to the mixer){OFF}")
         print(f"   Now {BOLD}slowly push fader 3 all the way up{OFF}.")
 
+    def shift_pickup_prep():
+        input(f"   Leave {BOLD}fader 3 at the top{OFF} (where the pickup check left it), then press Enter ")
+        qa.send([0xB5, 30, 64])             # CC 30 ch 6 = 64: fader 3 (all pages) is now above its value
+        print(f"   {DIM}(sent CC 30 = 64 on ch 6 to the mixer){OFF}")
+
     return [
         C("Press Shift + Rewind twice (to be sure you are on page 1). Then press Enter.", ctl=BTN["rewind"],
           silent=True, shift=True),
@@ -298,6 +303,10 @@ def checks(qa):
         C("Press Shift + Fast-forward once more (page 3, the editor's Pages change). Then press Enter.",
           ctl=BTN["ff"], silent=True, shift=True),
         C("Move fader 1 (page 3: volume of track 1).", ctl=FADER(1), page=3, need=[cc(1, 7)]),
+        C("Hold Shift 2 s, then let go and press Enter. (Page 3, and fader 3 now has a value to pick up.)",
+          ctl=BTN["shift"], silent=True, prep=shift_pickup_prep,
+          ask="While Shift was held, did the LED above fader 3 blink in bursts with the LED solid in "
+              "between (page 3 + pickup)? And is it solid now that Shift is released?"),
         C("Press Shift + Rewind twice, back to page 1. Then press Enter.", ctl=BTN["rewind"], silent=True,
           shift=True),
         # modes

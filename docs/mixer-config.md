@@ -122,7 +122,7 @@ The page-change blink (above) uses the same LEDs and takes priority for its ~1 s
 ## CC mode profile
 
 What CC mode does with a control nothing is mapped on (configuration fields `cc_*`, editor:
-Settings → CC mode profile). Strip *n* of page *p* = track / MIDI channel `track_base[p] + n`.
+the CC mode profile card). Strip *n* of page *p* = track / MIDI channel `track_base[p] + n`.
 
 | field | control | does |
 |---|---|---|
@@ -310,7 +310,7 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 - Midi-Suite-like device drawing; click a control to edit it.
 - **Mode bar DAW / CC**, **page selector 1..8 + "all pages"**, **Normal / Shift** toggle; every
   control shows where its current value comes from (this layer / inherited from ... / the mode).
-- Settings: the mixer's mode, the CC profile, **Choose a template…** (search, favourites, the
+- The CC mode profile card: the CC profile, **Choose a template…** (search, favourites, the
   template's `.md`), **Save as template…** (downloads the `.json` and a started `.md`).
 - Global settings (fader takeover, fader mismatch LED, page LED blink, encoder acceleration: on / off
   and its curve, overridable per encoder).

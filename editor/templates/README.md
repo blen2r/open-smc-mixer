@@ -3,7 +3,7 @@
 A template sets the mixer's **CC mode** for one device: the profile (which CC the faders, encoders,
 Mute, Solo and focus buttons send), the pages and their tracks, and any extra mappings. DAW mode
 and personal preferences (fader takeover, LEDs, encoder acceleration) are not part of it. In the
-editor: Settings → **Choose a template…** (search, ★ to keep favourites on top).
+editor: the **CC mode profile** card → **Choose a template…** (search, ★ to keep favourites on top).
 
 Each template is two files:
 
@@ -19,9 +19,9 @@ A template's name says whose it is, because two people's setups for the same dev
 
 ## Making one
 
-1. In the editor, set CC mode up for your device: Settings → CC mode profile, pages, tracks, and
+1. In the editor, set CC mode up for your device: the CC mode profile card (fields, focus groups, pages, tracks), and
    mappings with the Mode bar on **CC**. Try it on the device.
-2. Settings → **Save as template…**: give your name, the device and a one-line description. The
+2. **Save as template…** (same card): give your name, the device and a one-line description. The
    editor downloads `<name>.json` and a `<name>.md` started from the mapping.
 3. Finish the `.md`: what the device needs (its MIDI settings, channels), what each control does
    that is not obvious, what does not work.

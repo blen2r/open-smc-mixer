@@ -2,7 +2,7 @@
 'use strict';
 
 const $ = s => document.querySelector(s);
-const state = { link: null, cfg: null, saved: '', page: 0, shift: false, mode: 'daw', sel: null, loadedMode: null,
+const state = { profileOpen: (() => { try { return localStorage.getItem('smc-mixer-profile-open') !== '0'; } catch (e) { return true; } })(), link: null, cfg: null, saved: '', page: 0, shift: false, mode: 'daw', sel: null, loadedMode: null,
                 templates: [], faders: new Array(8).fill(0) };
 
 function toast(msg, err) {
@@ -216,75 +216,100 @@ function defaultChannel(id) {
 
 // ------------------------------------------------------------------ global settings
 
+// The CC mode profile (what a template sets: the card above the drawing) and the mixer's mode and
+// personal preferences (the Settings panel). Both write into state.cfg through one handler.
 function renderGlobals() {
-  const p = $('#globalPanel');
-  if (!state.cfg) { p.innerHTML = '<h2>Settings</h2><p class="hint">Connect or simulate a mixer.</p>'; return; }
+  const p = $('#globalPanel'), pp = $('#profilePanel');
+  if (!state.cfg) {
+    p.innerHTML = '<h2>Settings</h2><p class="hint">Connect or simulate a mixer.</p>';
+    pp.innerHTML = '<div class="phead"><h2>CC mode profile</h2></div>';
+    return;
+  }
   const g = state.cfg;
   const opt = (v, cur, label) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
   const ccIn = (id, v, none) => `<input type="number" id="${id}" min="0" max="127" value="${v === null ? '' : v}" placeholder="${none ? 'none' : ''}">`;
+
+  // the profile card
+  let ph = '<div class="phead"><h2>CC mode profile</h2>' +
+    `<span class="src">Template: <b>${g.name ? esc(g.name) : 'custom (edited by hand)'}</b></span>` +
+    '<button id="gPick">Choose a template…</button><button id="gSaveTpl">Save as template…</button>' +
+    `<span class="spacer"></span><button id="gToggle">${state.profileOpen ? 'Hide details' : 'Show details'}</button></div>`;
+  ph += '<p class="hint">What CC mode sends where nothing is mapped, for one device. A template sets this card and CC mode\'s mappings; your preferences (Settings) and DAW mode stay. Backup / Restore (top) save the whole mixer instead.</p>';
+  if (state.profileOpen) {
+    let c1 = '<h3>Controls</h3>';
+    c1 += field('Fader CC', ccIn('gCcF', g.cc_fader));
+    c1 += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true) + '<span class="hint">empty: as without Shift</span>');
+    c1 += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true) + '<span class="hint">empty: nothing (unless focused)</span>');
+    c1 += field('Mute CC', ccIn('gCcM', g.cc_mute, true) + '<span class="hint">toggles 127 / 0; empty: nothing</span>');
+    c1 += field('Solo', `<label><input type="checkbox" id="gSolo" ${g.solo_mutes ? 'checked' : ''}> mutes the other tracks</label>`);
+    c1 += field('Special modes', `<label><input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}> Shift + Mute / Solo / Rec / Track stop: fader = mod wheel / pitch bend / pressure / pan</label>`);
+    const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
+      `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
+    let c2 = '<h3>Focus groups</h3><p class="hint">Rec (or Track stop) on a strip makes the encoders below send these CCs on that strip\'s track; again: off. An empty box leaves that encoder as it is. All empty: the button does nothing. If both groups use the same encoder, turning one on blinks both buttons and turns the other off.</p>';
+    c2 += `<div class="flabel">Rec</div>${focusRow('focus_rec', 'gFoR')}<div class="flabel">Track stop</div>${focusRow('focus_stop', 'gFoS')}`;
+    if (focusOverlap(g)) c2 += '<p class="hint">These groups overlap (same encoder in both): only one can be on at a time.</p>';
+    let c3 = '<h3>Pages and tracks</h3>';
+    c3 += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`);
+    c3 += '<p class="hint">Track of strip 1, per page. Strips 2-8 are the next tracks (after 16: 1 again). The track is the MIDI channel of the strip\'s fader, encoder and buttons. To send one control elsewhere, map it.</p><div class="tb">' +
+      g.track_base.map((t, i) => `<label>page ${i + 1}<input type="number" class="gTb" data-i="${i}" min="1" max="16" value="${t + 1}"></label>`).join('') + '</div>';
+    c3 += field('Follow incoming', `<input type="checkbox" id="gFollow" ${g.follow_incoming ? 'checked' : ''}><span class="hint">CC / pitch bend / pressure received set the known value</span>`);
+    ph += `<div class="pgrid"><div>${c1}</div><div>${c2}</div><div>${c3}</div></div>`;
+  }
+  pp.innerHTML = ph;
+
+  // the settings panel
   let html = '<h2>Settings</h2>';
   html += field('Mixer mode', `<select id="gMode">${opt('daw', g.mode, 'DAW (Mackie, as stock)')}${opt('cc', g.mode, 'CC')}</select>`);
-  html += '<p class="hint">On the mixer: Shift + Left = DAW, Shift + Right = CC (the lit arrow shows the mode while Shift is held). The mode is kept across power cycles.</p>';
-  html += '<h3>CC mode profile</h3>';
-  html += `<div class="src">Template: <b>${g.name ? esc(g.name) : 'custom'}</b></div>`;
-  html += '<div class="row"><button id="gPick">Choose a template…</button><button id="gSaveTpl">Save as template…</button></div>';
-  html += field('Fader CC', ccIn('gCcF', g.cc_fader));
-  html += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true) + '<span class="hint">empty: as without Shift</span>');
-  html += field('Mute CC', ccIn('gCcM', g.cc_mute, true) + '<span class="hint">toggles 127 / 0; empty: Mute sends nothing</span>');
-  html += field('Solo', `<label><input type="checkbox" id="gSolo" ${g.solo_mutes ? 'checked' : ''}> mutes the other tracks</label>`);
-  html += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true) + '<span class="hint">empty: encoders send nothing (unless focused)</span>');
-  const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
-    `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
-  html += '<h3>Focus groups</h3><p class="hint">Rec (or Track stop) on a strip makes the encoders below send these CCs on that strip\'s track; again: off. An empty box leaves that encoder as it is. All empty: the button does nothing. If both groups use the same encoder, turning one on blinks both buttons and turns the other off.</p>';
-  html += field('Rec', focusRow('focus_rec', 'gFoR'));
-  html += field('Track stop', focusRow('focus_stop', 'gFoS'));
-  if (focusOverlap(g)) html += '<p class="hint">These groups overlap (same encoder in both): only one can be on at a time.</p>';
-  html += field('Special modes', `<label><input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}> Shift + Mute / Solo / Rec / Track stop: fader = mod wheel / pitch bend / pressure / pan</label>`);
-  html += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`);
-  html += '<h3>Track of strip 1, per page</h3><p class="hint">Strip 1 of a page is this track; strips 2-8 are the next ones (after 16: 1 again). The track is the MIDI channel of the strip\'s fader, encoder and buttons. To send one control elsewhere, map it.</p><div class="tb">' +
-    g.track_base.map((t, i) => `<label>page ${i + 1}<input type="number" class="gTb" data-i="${i}" min="1" max="16" value="${t + 1}"></label>`).join('') + '</div>';
+  html += '<p class="hint">On the mixer: Shift + Left = DAW, Shift + Right = CC (the lit arrow shows the mode while Shift is held). The mode is kept across power cycles. CC mode\'s profile is the card above the drawing.</p>';
   html += '<h3>Faders</h3>';
   html += field('Takeover', `<select id="gTk">${opt('pickup', g.fader_takeover, 'pickup')}${opt('jump', g.fader_takeover, 'jump')}</select>`);
   html += field('Mismatch LED', `<input type="checkbox" id="gLed" ${g.fader_led ? 'checked' : ''}>`);
   html += '<h3>Values</h3>';
-  html += field('Follow incoming', `<input type="checkbox" id="gFollow" ${g.follow_incoming ? 'checked' : ''}><span class="hint">CC / pitch bend / pressure received set the known value</span>`);
   html += field('Remember', `<input type="checkbox" id="gRemember" ${g.remember_values ? 'checked' : ''}><span class="hint">across power cycles</span>`);
   html += '<h3>Encoder acceleration</h3>';
   html += field('Acceleration', `<input type="checkbox" id="gAccel" ${g.accel ? 'checked' : ''}>`);
   html += field('x3 under', `<input type="number" id="gA3" min="1" max="100" value="${g.accel_ms_x3}"> ms between steps`);
   html += field('x2 under', `<input type="number" id="gA2" min="1" max="100" value="${g.accel_ms_x2}"> ms`);
   p.innerHTML = html;
+
   const cc = (sel, none) => { const v = $(sel).value.trim(); return v === '' && none ? null : Math.max(0, Math.min(127, +v || 0)); };
+  const box = el => { const v = el.value.trim(); return v === '' ? null : Math.max(0, Math.min(127, +v || 0)); };
   const upd = e => {
-    const before = JSON.stringify(PROFILE_FIELDS.filter(k => k !== 'name').map(k => g[k]));
+    const before = JSON.stringify(TEMPLATE_SETTINGS.map(k => g[k]));
     g.mode = $('#gMode').value;
-    g.cc_fader = cc('#gCcF');
-    g.cc_fader_shift = cc('#gCcFS', true);
-    g.cc_mute = cc('#gCcM', true);
-    g.solo_mutes = $('#gSolo').checked;
-    g.cc_encoder = cc('#gCcK', true);
-    const box = el => { const v = el.value.trim(); return v === '' ? null : Math.max(0, Math.min(127, +v || 0)); };
-    document.querySelectorAll('.gFoR').forEach(el => { g.focus_rec[+el.dataset.k] = box(el); });
-    document.querySelectorAll('.gFoS').forEach(el => { g.focus_stop[+el.dataset.k] = box(el); });
-    g.special_modes = $('#gSpecial').checked;
-    g.pages = Math.max(1, Math.min(8, +$('#gPages').value || 1));
-    document.querySelectorAll('.gTb').forEach(el => { g.track_base[+el.dataset.i] = Math.max(1, Math.min(16, +el.value || 1)) - 1; });
+    if (state.profileOpen) {
+      g.cc_fader = cc('#gCcF');
+      g.cc_fader_shift = cc('#gCcFS', true);
+      g.cc_mute = cc('#gCcM', true);
+      g.solo_mutes = $('#gSolo').checked;
+      g.cc_encoder = cc('#gCcK', true);
+      document.querySelectorAll('.gFoR').forEach(el => { g.focus_rec[+el.dataset.k] = box(el); });
+      document.querySelectorAll('.gFoS').forEach(el => { g.focus_stop[+el.dataset.k] = box(el); });
+      g.special_modes = $('#gSpecial').checked;
+      g.pages = Math.max(1, Math.min(8, +$('#gPages').value || 1));
+      document.querySelectorAll('.gTb').forEach(el => { g.track_base[+el.dataset.i] = Math.max(1, Math.min(16, +el.value || 1)) - 1; });
+      g.follow_incoming = $('#gFollow').checked;
+    }
     g.fader_takeover = $('#gTk').value;
     g.fader_led = $('#gLed').checked;
-    g.follow_incoming = $('#gFollow').checked;
     g.remember_values = $('#gRemember').checked;
     g.accel = $('#gAccel').checked;
     g.accel_ms_x3 = Math.max(1, Math.min(100, +$('#gA3').value || 6));
     g.accel_ms_x2 = Math.max(1, Math.min(100, +$('#gA2').value || 12));
     // the profile edited by hand is no longer the template's
-    if (JSON.stringify(PROFILE_FIELDS.filter(k => k !== 'name').map(k => g[k])) !== before) g.name = '';
+    if (JSON.stringify(TEMPLATE_SETTINGS.map(k => g[k])) !== before) g.name = '';
     if (e && e.target.id === 'gMode') state.mode = g.mode;
     if (state.page > g.pages) state.page = 0;
     refreshAll();
   };
-  p.querySelectorAll('select, input').forEach(e => { e.onchange = upd; });
+  [p, pp].forEach(panel => panel.querySelectorAll('select, input').forEach(el => { el.onchange = upd; }));
   $('#gPick').onclick = openPicker;
   $('#gSaveTpl').onclick = saveTemplate;
+  $('#gToggle').onclick = () => {
+    state.profileOpen = !state.profileOpen;
+    try { localStorage.setItem('smc-mixer-profile-open', state.profileOpen ? '1' : '0'); } catch (err) { /* private mode */ }
+    renderGlobals();
+  };
 }
 
 function esc(t) {
@@ -521,7 +546,7 @@ $('#btnExport').onclick = () => {
   const blob = new Blob([JSON.stringify(state.cfg, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'smc-mixer-config.json';
+  a.download = `smc-mixer-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
 };
@@ -530,12 +555,21 @@ $('#fileImport').onchange = async e => {
   const f = e.target.files[0];
   if (!f) return;
   try {
-    const cfg = normalizeConfig(JSON.parse(await f.text()));
-    encodeConfig(cfg);                  // validates
-    state.cfg = cfg;
-    refreshAll();
-    toast('imported: press "Save to mixer" to send it');
-  } catch (err) { toast(`not a configuration: ${err.message}`, true); }
+    const obj = JSON.parse(await f.text());
+    if (obj.settings && obj.author) {   // a template file: apply it as one (DAW mode, preferences stay)
+      const problems = checkTemplate(obj);
+      if (problems.length) throw new Error(problems.join('; '));
+      state.cfg = applyTemplate(state.cfg, obj);
+      refreshAll();
+      toast(`template "${obj.name}" applied: press "Save to mixer" to send it`);
+    } else {
+      const cfg = normalizeConfig(obj);
+      encodeConfig(cfg);                // validates
+      state.cfg = cfg;
+      refreshAll();
+      toast('backup restored here: press "Save to mixer" to send it');
+    }
+  } catch (err) { toast(`not a backup or a template: ${err.message}`, true); }
   e.target.value = '';
 };
 $('#chkEvents').onchange = async e => {
