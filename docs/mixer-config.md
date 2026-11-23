@@ -24,7 +24,7 @@ the base and anything can be overridden**, per page and per Shift layer:
 | track button | 8 x 4 | `T1.1..T8.4` | column x row, top row = 1; have LEDs |
 | global button | 11 | `G1..G11` | bottom row, left to right: Play, Pause, Record, Rewind, Fast-forward, `<<`, `>>`, Up, Down, Left, Right |
 | oval button | 2 | `O1`, `O2` | top right: O1 = Bluetooth, O2 = **Shift** (neither sends MIDI) |
-| fader LED | 8 | `L1..L8` | under each knob / above each fader; stock: lit when fader position != host value |
+| fader LED | 8 | `L1..L8` | under each knob / above each fader; stock: **blinks** while fader position != host value (tight tolerance), off when they match |
 
 ## DAW mode defaults (stock fw 013, captured 2026-11-22)
 
@@ -103,7 +103,7 @@ Knobs are endless encoders and do not need it.
 
 ### Fader mismatch LED
 
-Each fader has an LED above it (the lights under the knobs). Like the stock DAW mode, it lights while
+Each fader has an LED above it (the lights under the knobs). Like the stock DAW mode, it blinks while
 the fader's physical position differs from the value it should have, so you know which faders need to
 be moved before they take effect:
 
