@@ -198,6 +198,7 @@ or per-step extras); pattern length other than 8 (e.g. chaining two pages).
 | `number` | 0..127 (CC / note / program) | cc, note, pc |
 | `min`, `max` | 0..127 (0..16383 for pitchbend) | absolute controls, button values |
 | `encoder` | `absolute`, `relative-2c`, `relative-bin`, `relative-sb` (TBD list) + `speed` | knobs |
+| `accel` | `inherit`, `off`, or a curve (steps closer than 8 / 16 / 30 ms count x4 / x3 / x2 by default, editable) | knobs; also a global setting |
 | `button` | `momentary`, `toggle`, `trigger` | buttons |
 | `led` | `follow` (lit while on), `off`, `on`, `daw` (DAW feedback) | buttons with LEDs |
 | `takeover` | `inherit`, `jump`, `pickup` | faders |
@@ -245,7 +246,8 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 - Midi-Suite-like device drawing; click a control to edit it.
 - **Page selector 1..8 + "all pages"**, **Normal / Shift** toggle; every control shows where its
   current value comes from (this layer / inherited from ... / DAW default).
-- Global settings (fader takeover, fader mismatch LED, page LED blink).
+- Global settings (fader takeover, fader mismatch LED, page LED blink, knob acceleration: on / off
+  and its curve, overridable per knob).
 - Live MIDI monitor, JSON import / export, a simulated device for working without the hardware.
 
 ## Open questions
