@@ -75,6 +75,15 @@
   .fg label { font-size: 11px; color: var(--muted); text-align: center; display: flex; flex-direction: column; min-width: 0; }
   .fg input { width: 100%; min-width: 0; padding-left: 2px; padding-right: 2px; text-align: center; }
   .flabel { color: var(--muted); margin: 6px 0 2px; }
+  .legend { color: var(--muted); font-size: 12px; margin-top: 12px; line-height: 1.5; }
+  .legend p { margin: 0 0 8px; }
+  .legend ul { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 4px; }
+  .legend li { display: flex; align-items: center; gap: 8px; }
+  .legend b { font-weight: 600; }
+  .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .sw.here { background: var(--accent); } .sw.inh { background: var(--accent2); } .sw.base { background: var(--dim); }
+  .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .chain span { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--text); }
   .combo { display: inline-flex; gap: 6px; flex: 1; min-width: 0; }
   .combo select { flex: 1; min-width: 0; }
   .combo input[type=number] { width: 64px; flex: none; }
@@ -130,10 +139,16 @@
       <div class="surface" id="surface"></div>
       <div class="bottom" id="bottom"></div>
     </div>
-    <p class="hint">Click a control to edit it on the selected page and layer. <span style="color:var(--accent)">Orange</span>: mapped right here.
-      <span style="color:var(--accent2)">Blue</span>: inherited from a broader layer (all pages, or the normal layer).
-      Grey: what the mode does by itself (DAW: the stock Mackie layout; CC: the profile above).
-      Each mode has its own mappings. Hierarchy, the first that has a mapping wins: page + Shift → page → all pages + Shift → all pages → the mode.</p>
+    <div class="legend">
+      <p>Click a control to edit it on the selected mode, page and layer. Each mode has its own mappings.</p>
+      <ul>
+        <li><span class="sw here"></span><span><b>Orange</b>: mapped right here</span></li>
+        <li><span class="sw inh"></span><span><b>Blue</b>: inherited from a broader layer (all pages, or the normal layer)</span></li>
+        <li><span class="sw base"></span><span><b>Grey</b>: what the mode does by itself (DAW: the stock Mackie layout; CC: the profile above)</span></li>
+      </ul>
+      <p>Hierarchy, the first that has a mapping wins:</p>
+      <p class="chain"><span>page + Shift</span>→<span>page</span>→<span>all pages + Shift</span>→<span>all pages</span>→<span>the mode</span></p>
+    </div>
   </section>
   <aside>
     <div class="panel" id="editPanel"><h2>Control</h2><p class="hint">Select a control on the mixer drawing.</p></div>
