@@ -15,7 +15,7 @@ Used two ways:
   and our VM (fw/boot/boot.h STOCK_VM_EXTRA):
 
     python3 host/bootpkg.py --board mixer --to-stock work/flash/stock_area_013.bin \
-        --vm-sector-from ~/smc_mixer/backups/SMC-Mixer_013_after_install.bin \
+        --vm-sector-from dumps/mixer_after_install.bin \
         --out work/flash/to_stock.bin
 """
 import argparse

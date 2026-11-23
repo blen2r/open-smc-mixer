@@ -46,7 +46,10 @@ class MixerLink {
   async hello() {
     const r = await this.command(0x01);
     const d = r.data, u16 = i => d[i] | (d[i + 1] << 8);
-    return { fw: u16(0), configVersion: u16(2), maxBytes: u16(4), controls: d[6], pages: d[7], page: d[8], length: u16(9) };
+    const h = { fw: u16(0), configVersion: u16(2), maxBytes: u16(4), controls: d[6], pages: d[7], page: d[8], length: u16(9),
+                mode: d.length > 11 ? d[11] : undefined };
+    if (h.configVersion !== CFG.VERSION) throw new Error(`the mixer's firmware speaks configuration version ${h.configVersion}, this editor ${CFG.VERSION}: update the firmware (host/mixer_update.sh)`);
+    return h;
   }
 
   async readConfig() {
@@ -105,13 +108,13 @@ class SimulatedLink extends MixerLink {
     super();
     this.name = 'simulated mixer';
     this.active = encodeConfig(this.loadSaved() || defaultConfig());
-    this.staging = new Uint8Array(2432);
+    this.staging = new Uint8Array(CFG.MAX_BYTES);
     this.staging.set(this.active);
     this.eventsOn = false;
   }
 
   loadSaved() {
-    try { return JSON.parse(localStorage.getItem('smc-mixer-sim')); } catch (e) { return null; }
+    try { const c = localStorage.getItem('smc-mixer-sim'); return c ? normalizeConfig(JSON.parse(c)) : null; } catch (e) { return null; }
   }
 
   reply(seq, status, data = []) {
@@ -124,7 +127,7 @@ class SimulatedLink extends MixerLink {
     switch (cmd) {
       case 0x01: {
         const l = this.active.length;
-        this.reply(seq, 0, [1, 0, 1, 0, 2432 & 0xFF, 2432 >> 8, 61, 8, 1, l & 0xFF, l >> 8]);
+        this.reply(seq, 0, [2, 0, CFG.VERSION, 0, CFG.MAX_BYTES & 0xFF, CFG.MAX_BYTES >> 8, 61, 8, 1, l & 0xFF, l >> 8, this.active[8]]);
         break;
       }
       case 0x02: this.reply(seq, 0, Array.from(this.active.slice(u16(0), u16(0) + d[2]))); break;

@@ -17,9 +17,14 @@ import zlib
 import mido
 
 MAGIC = b"SMXC"
-HEADER = 32
+VERSION = 2
+HEADER = 64
 ENTRY = 10
+NONE = 0x80
+NAME_LEN = 28
 TYPES = ["disabled", "cc", "note", "program", "pitchbend", "pressure", "base"]
+MODES = ["daw", "cc"]
+HEAD_FMT = "<4sHHBBBBBBBBB8sBBBBBBB28sI"      # editor/config.js, mixer_config.h
 
 
 def pack7(data):
@@ -73,7 +78,8 @@ class Mixer:
     def hello(self):
         st, d = self.cmd(0x01)
         fw, cv, mx, ctl, pages, page, length = struct.unpack("<HHHBBBH", d[:11])
-        return dict(fw=fw, config_version=cv, max_bytes=mx, controls=ctl, pages=pages, page=page, length=length)
+        return dict(fw=fw, config_version=cv, max_bytes=mx, controls=ctl, pages=pages, page=page, length=length,
+                    mode=MODES[d[11]] if len(d) > 11 and d[11] < 2 else None)
 
     def read(self):
         h = self.hello()
@@ -96,31 +102,54 @@ class Mixer:
 
 
 def decode(blob):
-    (magic, ver, n, base, takeover, led, follow, remember, accel, a3, a2, pages) = \
-        struct.unpack_from("<4sHHBBBBBBBBB", blob)
+    (magic, ver, n, mode, takeover, led, follow, remember, accel, a3, a2, pages, tb,
+     ccf, ccfs, ccm, cck, ccfo, flags, _, name, _crc) = struct.unpack_from(HEAD_FMT, blob)
     assert magic == MAGIC, magic
-    cfg = dict(version=ver, base=["daw", "opxy"][base], fader_takeover=["jump", "pickup"][takeover],
+    if ver != VERSION:
+        raise SystemExit(f"configuration version {ver}: update the mixer's firmware")
+    cc = lambda b: None if b & NONE else b
+    cfg = dict(mode=MODES[mode], fader_takeover=["jump", "pickup"][takeover],
                fader_led=bool(led), follow_incoming=bool(follow), remember_values=bool(remember),
-               accel=bool(accel), accel_ms_x3=a3, accel_ms_x2=a2, pages=pages,
-               track_base=list(blob[17:25]), mappings=[])
+               accel=bool(accel), accel_ms_x3=a3, accel_ms_x2=a2, pages=pages, track_base=list(tb),
+               name=name.split(b"\0")[0].decode("ascii", "replace"),
+               cc_fader=cc(ccf), cc_fader_shift=cc(ccfs), cc_mute=cc(ccm), cc_knob=cc(cck), cc_focus=cc(ccfo),
+               solo_mutes=bool(flags & 1), special_modes=bool(flags & 2), mappings=[])
     for i in range(n):
-        c, layer, t, ch, num, flags, lo, hi = blob[HEADER + i * ENTRY: HEADER + i * ENTRY + 8]
-        cfg["mappings"].append(dict(control=c, page=layer & 15, shift=bool(layer & 16), type=TYPES[t],
-                                    channel=ch + 1, number=num, flags=flags, min=lo, max=hi))
+        c, layer, t, ch, num, fl, lo, hi = blob[HEADER + i * ENTRY: HEADER + i * ENTRY + 8]
+        cfg["mappings"].append(dict(mode="daw" if layer & 0x20 else "cc", control=c, page=layer & 15,
+                                    shift=bool(layer & 16), type=TYPES[t], channel=ch + 1, number=num,
+                                    flags=fl, min=lo, max=hi))
     return cfg
 
 
+def normalize(cfg):
+    """A configuration in the current shape: older exports (base: opxy / daw, no mode on mappings,
+    no CC profile) are brought up to date, as the editor's normalizeConfig()."""
+    cfg = dict(cfg)
+    base = cfg.pop("base", None)
+    out = dict(mode="daw" if base == "daw" else "cc" if base else "daw", name="OP-XY - blen2r" if base != "daw" else "",
+               cc_fader=7, cc_fader_shift=10, cc_mute=9, cc_knob=12, cc_focus=12, solo_mutes=True, special_modes=True)
+    out.update(cfg)
+    out.pop("version", None)
+    out["mappings"] = [dict({"mode": "daw" if base == "daw" else "cc"}, **m) for m in cfg.get("mappings", [])]
+    return out
+
+
 def encode(cfg):
-    head = bytearray(HEADER)
-    struct.pack_into("<4sHHBBBBBBBBB", head, 0, MAGIC, 1, len(cfg["mappings"]),
-                     ["daw", "opxy"].index(cfg["base"]), ["jump", "pickup"].index(cfg["fader_takeover"]),
-                     int(cfg["fader_led"]), int(cfg["follow_incoming"]), int(cfg["remember_values"]),
-                     int(cfg["accel"]), cfg["accel_ms_x3"], cfg["accel_ms_x2"], cfg["pages"])
-    head[17:25] = bytes(cfg["track_base"])
-    ents = b"".join(bytes([m["control"], m["page"] | (16 if m["shift"] else 0), TYPES.index(m["type"]),
-                           m["channel"] - 1, m["number"], m["flags"], m["min"], m["max"], 0, 0])
-                    for m in cfg["mappings"])
-    struct.pack_into("<I", head, 28, zlib.crc32(bytes(head) + ents))
+    cc = lambda v: NONE if v is None else v & 127
+    name = cfg.get("name", "").encode("ascii", "replace")[:NAME_LEN].ljust(NAME_LEN, b"\0")
+    maps = cfg["mappings"]
+    head = bytearray(struct.pack(
+        HEAD_FMT, MAGIC, VERSION, len(maps), MODES.index(cfg["mode"]),
+        ["jump", "pickup"].index(cfg["fader_takeover"]), int(cfg["fader_led"]), int(cfg["follow_incoming"]),
+        int(cfg["remember_values"]), int(cfg["accel"]), cfg["accel_ms_x3"], cfg["accel_ms_x2"], cfg["pages"],
+        bytes(cfg["track_base"]), cc(cfg["cc_fader"]), cc(cfg["cc_fader_shift"]), cc(cfg["cc_mute"]),
+        cc(cfg["cc_knob"]), cc(cfg["cc_focus"]), int(cfg["solo_mutes"]) | int(cfg["special_modes"]) << 1, 0,
+        name, 0))
+    ents = b"".join(bytes([m["control"], m["page"] | (16 if m["shift"] else 0) | (0x20 if m.get("mode") == "daw" else 0),
+                           TYPES.index(m["type"]), m["channel"] - 1, m["number"], m["flags"], m["min"], m["max"], 0, 0])
+                    for m in maps)
+    struct.pack_into("<I", head, 60, zlib.crc32(bytes(head) + ents))
     return bytes(head) + ents
 
 
@@ -134,7 +163,7 @@ def main():
     elif c == "dump":
         print(json.dumps(decode(m.read()), indent=1))
     elif c == "load":
-        cfg = json.load(open(sys.argv[2]))
+        cfg = normalize(json.load(open(sys.argv[2])))
         st = m.write(encode(cfg))
         print("committed" if st == 0 else f"refused, status {st}")
     elif c == "factory":

@@ -7,7 +7,7 @@ area plaintext) and points sector 0 at the installer; fw/boot/install.c then che
 staging area, erases, writes the payload (encrypted below the stock VM start), erases the rest
 of the stock VM on a stock package, and erases the slot, staging area and diagnostics page.
 
-    python3 host/mixer_install_sim.py --dump ~/smc_mixer/backups/SMC-Mixer_013_after_install.bin
+    python3 host/mixer_install_sim.py --dump dumps/mixer_after_install.bin
 
 Checks:
   1. stock -> our bootloader (host/install_from_stock.py --board mixer with

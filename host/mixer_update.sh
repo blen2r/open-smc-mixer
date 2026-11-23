@@ -30,9 +30,11 @@ if ! in_dfu; then
         # the raw port is held (the web editor in Chrome, mixer_qa.py): go through the ALSA
         # sequencer instead, which shares it
         echo "   (raw port busy, sending through the ALSA sequencer)"
-        py="${MIXER_PY:-$HOME/smc_mixer/fw_work/.venv/bin/python}"
-        [ -x "$py" ] || py=python3
-        "$py" -c 'import mido; n = next(n for n in mido.get_output_names() if "SMC-Mixer open fw" in n)
+        # MIXER_PY: a Python with mido + python-rtmidi; else python3, else uv
+        if [ -n "${MIXER_PY:-}" ]; then py=("$MIXER_PY")
+        elif python3 -c "import mido, rtmidi" 2>/dev/null; then py=(python3)
+        else py=(uv run --with mido --with python-rtmidi python); fi
+        "${py[@]}" -c 'import mido; n = next(n for n in mido.get_output_names() if "SMC-Mixer open fw" in n)
 mido.open_output(n).send(mido.Message("sysex", data=[0x7D, 0x4D, 0x70]))' 2>&1 | grep -v MidiIn
     fi
     wait_for in_dfu 15 || die "the bootloader did not show up"

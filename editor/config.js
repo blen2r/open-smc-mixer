@@ -1,14 +1,20 @@
-// SMC-Mixer configuration: the binary format of fw/smcpad/examples/mixer/mixer_config.h,
-// shared by the editor and its simulated device. A configuration as an object:
-//   { base: 'opxy'|'daw', fader_takeover: 'jump'|'pickup', fader_led, follow_incoming,
+// SMC-Mixer configuration: the binary format of fw/smcpad/examples/mixer/mixer_config.h (version
+// 2), shared by the editor and its simulated device. A configuration as an object:
+//   { mode: 'daw'|'cc', fader_takeover: 'jump'|'pickup', fader_led, follow_incoming,
 //     remember_values, accel, accel_ms_x3, accel_ms_x2, pages, track_base[8],
-//     mappings: [{ control, page (0 = all), shift, type, channel (1..16), number, flags, min, max }] }
+//     CC mode's profile: name, cc_fader, cc_fader_shift, cc_mute, cc_knob, cc_focus (a CC number,
+//       or null for none where allowed), solo_mutes, special_modes,
+//     mappings: [{ mode: 'cc'|'daw', control, page (0 = all), shift, type, channel (1..16), number,
+//                  flags, min, max }] }
+// A template (editor/templates/*.json) is CC mode's part of it: the profile, pages, track bases,
+// follow_incoming and the CC-mode mappings, plus who made it for what.
 'use strict';
 
 const CFG = {
-  MAGIC: 'SMXC', VERSION: 1, HEADER: 32, ENTRY: 10, MAX_ENTRIES: 240,
+  MAGIC: 'SMXC', VERSION: 2, HEADER: 64, ENTRY: 10, MAX_ENTRIES: 240, MAX_BYTES: 64 + 240 * 10,
+  NONE: 0x80, NAME_LEN: 28, LAYER_SHIFT: 0x10, LAYER_DAW: 0x20,
   TYPES: ['disabled', 'cc', 'note', 'program', 'pitchbend', 'pressure', 'base'],
-  BASES: ['daw', 'opxy'],
+  MODES: ['daw', 'cc'],
   TAKEOVERS: ['jump', 'pickup'],
   // flags
   BUTTON_MASK: 0x03, MOMENTARY: 0x00, TOGGLE: 0x01, TRIGGER: 0x02,
@@ -33,13 +39,23 @@ const CONTROLS = (() => {
   return list;
 })();
 
-// What the base profile does with a control, for the editor's "inherited" display.
-function baseDescription(cfg, id, page, shift) {
+// What a mode does with a control when nothing is mapped, for the editor's "inherited" display.
+const DAW_NOTES = [94, 93, 95, 91, 92, 46, 47, 96, 97, 98, 99];
+const ROWS = ['mute', 'solo', 'rec', 'select'];
+
+function reservedFor(id, shift) {
+  if (id === 60) return 'Shift';
+  if (shift && (id === 48 + 3 || id === 48 + 4)) return id === 51 ? 'page −' : 'page +';
+  if (shift && (id === 48 + 9 || id === 48 + 10)) return id === 57 ? 'DAW mode' : 'CC mode';
+  return null;
+}
+
+function baseDescription(cfg, id, page, shift, mode) {
   const c = CONTROLS[id];
   const tb = cfg.track_base[(page || 1) - 1] || 0;
-  const DAW_NOTES = [94, 93, 95, 91, 92, 46, 47, 96, 97, 98, 99];
-  if (id === 60) return 'Shift (reserved)';
-  if (cfg.base === 'daw') {
+  const r = reservedFor(id, shift);
+  if (r) return `${r} (reserved)`;
+  if (mode === 'daw') {
     if (c.kind === 'knob') return `DAW: CC ${16 + c.strip} relative (V-Pot)`;
     if (c.kind === 'fader') return `DAW: pitch bend ch ${c.strip + 1} + touch note ${104 + c.strip}`;
     if (c.row !== undefined) return `DAW: note ${[16, 8, 0, 24][c.row] + c.strip}`;
@@ -47,45 +63,52 @@ function baseDescription(cfg, id, page, shift) {
     return 'nothing';
   }
   const tr = tb + (c.strip || 0) + 1;
-  if (c.kind === 'knob') return `OP-XY: CC 12 ch ${tr} (Rec / Select focus: CC 12-15 of the focused track)`;
-  if (c.kind === 'fader') return shift ? `OP-XY: pan, CC 10 ch ${tr}` : `OP-XY: volume, CC 7 ch ${tr} (Shift + strip button: special modes)`;
+  const name = cfg.name ? `${cfg.name}: ` : '';
+  if (c.kind === 'knob') {
+    const focus = cfg.cc_focus === null ? '' : ` (Rec / Select focus: CC ${cfg.cc_focus}-${cfg.cc_focus + 3} of the focused track)`;
+    return `${name}CC ${cfg.cc_knob} ch ${tr}${focus}`;
+  }
+  if (c.kind === 'fader') {
+    if (shift && cfg.cc_fader_shift !== null) return `${name}CC ${cfg.cc_fader_shift} ch ${tr}`;
+    return `${name}CC ${cfg.cc_fader} ch ${tr}${cfg.special_modes ? ' (Shift + strip button: special modes)' : ''}`;
+  }
   if (c.row !== undefined) {
-    const what = [`mute track ${tr} (CC 9)`, `solo track ${tr} (mutes the others)`,
-                  `knobs 1-4 focus on track ${tr}`, `knobs 5-8 focus on track ${tr}`][c.row];
-    const mode = ['mod wheel', 'pitch bend', 'channel pressure', 'pan'][c.row];
-    return shift ? `OP-XY: fader ${c.strip + 1} special mode: ${mode}` : `OP-XY: ${what}`;
+    if (shift && cfg.special_modes) {
+      return `${name}fader ${c.strip + 1} special mode: ${['mod wheel', 'pitch bend', 'channel pressure', 'pan'][c.row]}`;
+    }
+    const what = [
+      cfg.cc_mute === null ? null : `mute track ${tr} (CC ${cfg.cc_mute})`,
+      cfg.solo_mutes && cfg.cc_mute !== null ? `solo track ${tr} (mutes the others)` : null,
+      cfg.cc_focus === null ? null : `knobs 1-4 focus on track ${tr}`,
+      cfg.cc_focus === null ? null : `knobs 5-8 focus on track ${tr}`][c.row];
+    return what ? name + what : 'nothing';
   }
-  if (c.bottom !== undefined) {
-    if (shift && (c.bottom === 3 || c.bottom === 4)) return `page ${c.bottom === 3 ? 'down' : 'up'} (reserved)`;
-    return `note ${DAW_NOTES[c.bottom]} (as the stock DAW mode)`;
-  }
+  if (c.bottom !== undefined) return `note ${DAW_NOTES[c.bottom]} (as the stock DAW mode)`;
   return 'nothing';
 }
 
 // The same, short, for the drawing.
-function baseShort(cfg, id, page, shift) {
+function baseShort(cfg, id, page, shift, mode) {
   const c = CONTROLS[id];
   const tb = cfg.track_base[(page || 1) - 1] || 0;
   const tr = tb + (c.strip || 0) + 1;
-  const DAW_NOTES = [94, 93, 95, 91, 92, 46, 47, 96, 97, 98, 99];
-  if (id === 60) return 'reserved';
-  if (cfg.base === 'daw') {
+  const r = reservedFor(id, shift);
+  if (r) return r;
+  if (mode === 'daw') {
     if (c.kind === 'knob') return `V-Pot CC${16 + c.strip}`;
     if (c.kind === 'fader') return `PB ch${c.strip + 1}`;
     if (c.row !== undefined) return `note ${[16, 8, 0, 24][c.row] + c.strip}`;
     if (c.bottom !== undefined) return `note ${DAW_NOTES[c.bottom]}`;
     return '—';
   }
-  if (c.kind === 'knob') return `CC12 ch${tr}`;
-  if (c.kind === 'fader') return shift ? `pan ch${tr}` : `vol ch${tr}`;
+  if (c.kind === 'knob') return `CC${cfg.cc_knob} ch${tr}`;
+  if (c.kind === 'fader') return shift && cfg.cc_fader_shift !== null ? `CC${cfg.cc_fader_shift} ch${tr}` : `CC${cfg.cc_fader} ch${tr}`;
   if (c.row !== undefined) {
-    if (shift) return ['→ mod', '→ bend', '→ press', '→ pan'][c.row];
-    return [`mute T${tr}`, `solo T${tr}`, `focus A T${tr}`, `focus B T${tr}`][c.row];
+    if (shift && cfg.special_modes) return ['→ mod', '→ bend', '→ press', '→ pan'][c.row];
+    return [cfg.cc_mute === null ? '—' : `mute T${tr}`, cfg.solo_mutes && cfg.cc_mute !== null ? `solo T${tr}` : '—',
+            cfg.cc_focus === null ? '—' : `focus A T${tr}`, cfg.cc_focus === null ? '—' : `focus B T${tr}`][c.row];
   }
-  if (c.bottom !== undefined) {
-    if (shift && (c.bottom === 3 || c.bottom === 4)) return c.bottom === 3 ? 'page −' : 'page +';
-    return `note ${DAW_NOTES[c.bottom]}`;
-  }
+  if (c.bottom !== undefined) return `note ${DAW_NOTES[c.bottom]}`;
   return '—';
 }
 
@@ -98,13 +121,25 @@ function crc32(bytes) {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
+// CC mode's profile and what a template carries
+const PROFILE_FIELDS = ['name', 'cc_fader', 'cc_fader_shift', 'cc_mute', 'cc_knob', 'cc_focus', 'solo_mutes', 'special_modes'];
+const TEMPLATE_SETTINGS = ['pages', 'track_base', 'follow_incoming', 'cc_fader', 'cc_fader_shift', 'cc_mute', 'cc_knob',
+                           'cc_focus', 'solo_mutes', 'special_modes'];
+
 function defaultConfig() {
+  // as fw/smcpad/examples/mixer/mixer_config.c defaults(): DAW mode, CC mode = "OP-XY - blen2r"
   return {
-    base: 'opxy', fader_takeover: 'pickup', fader_led: true, follow_incoming: true,
+    mode: 'daw', fader_takeover: 'pickup', fader_led: true, follow_incoming: true,
     remember_values: true, accel: true, accel_ms_x3: 6, accel_ms_x2: 12, pages: 2,
-    track_base: [0, 8, 0, 8, 0, 8, 0, 8], mappings: [],
+    track_base: [0, 8, 0, 8, 0, 8, 0, 8],
+    name: 'OP-XY - blen2r', cc_fader: 7, cc_fader_shift: 10, cc_mute: 9, cc_knob: 12, cc_focus: 12,
+    solo_mutes: true, special_modes: true,
+    mappings: [],
   };
 }
+
+const ccByte = v => (v === null || v === undefined ? CFG.NONE : v & 127);
+const ccVal = b => (b & CFG.NONE ? null : b);
 
 function encodeConfig(cfg) {
   const n = cfg.mappings.length;
@@ -114,7 +149,7 @@ function encodeConfig(cfg) {
   for (let i = 0; i < 4; i++) buf[i] = CFG.MAGIC.charCodeAt(i);
   dv.setUint16(4, CFG.VERSION, true);
   dv.setUint16(6, n, true);
-  buf[8] = CFG.BASES.indexOf(cfg.base);
+  buf[8] = CFG.MODES.indexOf(cfg.mode);
   buf[9] = CFG.TAKEOVERS.indexOf(cfg.fader_takeover);
   buf[10] = cfg.fader_led ? 1 : 0;
   buf[11] = cfg.follow_incoming ? 1 : 0;
@@ -124,10 +159,18 @@ function encodeConfig(cfg) {
   buf[15] = cfg.accel_ms_x2;
   buf[16] = cfg.pages;
   for (let p = 0; p < 8; p++) buf[17 + p] = cfg.track_base[p] & 15;
+  buf[25] = ccByte(cfg.cc_fader);
+  buf[26] = ccByte(cfg.cc_fader_shift);
+  buf[27] = ccByte(cfg.cc_mute);
+  buf[28] = ccByte(cfg.cc_knob);
+  buf[29] = ccByte(cfg.cc_focus);
+  buf[30] = (cfg.solo_mutes ? 1 : 0) | (cfg.special_modes ? 2 : 0);
+  const name = (cfg.name || '').replace(/[^\x20-\x7e]/g, '?').slice(0, CFG.NAME_LEN);
+  for (let i = 0; i < name.length; i++) buf[32 + i] = name.charCodeAt(i);
   cfg.mappings.forEach((m, i) => {
     const o = CFG.HEADER + i * CFG.ENTRY;
     buf[o] = m.control;
-    buf[o + 1] = (m.page & 15) | (m.shift ? 16 : 0);
+    buf[o + 1] = (m.page & 15) | (m.shift ? CFG.LAYER_SHIFT : 0) | (m.mode === 'daw' ? CFG.LAYER_DAW : 0);
     buf[o + 2] = CFG.TYPES.indexOf(m.type);
     buf[o + 3] = (m.channel - 1) & 15;
     buf[o + 4] = m.number & 127;
@@ -135,8 +178,8 @@ function encodeConfig(cfg) {
     buf[o + 6] = m.min & 127;
     buf[o + 7] = m.max & 127;
   });
-  dv.setUint32(28, 0, true);
-  dv.setUint32(28, crc32(buf), true);
+  dv.setUint32(60, 0, true);
+  dv.setUint32(60, crc32(buf), true);
   return buf;
 }
 
@@ -144,31 +187,94 @@ function decodeConfig(buf) {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   const magic = String.fromCharCode(...buf.slice(0, 4));
   if (magic !== CFG.MAGIC) throw new Error('not an SMC-Mixer configuration');
+  const version = dv.getUint16(4, true);
+  if (version !== CFG.VERSION) throw new Error(`configuration version ${version}: update the mixer's firmware`);
   const n = dv.getUint16(6, true);
+  const nameBytes = Array.from(buf.slice(32, 32 + CFG.NAME_LEN));
+  const end = nameBytes.indexOf(0);
   const cfg = {
-    base: CFG.BASES[buf[8]] || 'opxy', fader_takeover: CFG.TAKEOVERS[buf[9]] || 'pickup',
+    mode: CFG.MODES[buf[8]] || 'daw', fader_takeover: CFG.TAKEOVERS[buf[9]] || 'pickup',
     fader_led: !!buf[10], follow_incoming: !!buf[11], remember_values: !!buf[12], accel: !!buf[13],
     accel_ms_x3: buf[14], accel_ms_x2: buf[15], pages: buf[16],
-    track_base: Array.from(buf.slice(17, 25)), mappings: [],
+    track_base: Array.from(buf.slice(17, 25)),
+    name: String.fromCharCode(...(end < 0 ? nameBytes : nameBytes.slice(0, end))),
+    cc_fader: ccVal(buf[25]), cc_fader_shift: ccVal(buf[26]), cc_mute: ccVal(buf[27]), cc_knob: ccVal(buf[28]),
+    cc_focus: ccVal(buf[29]), solo_mutes: !!(buf[30] & 1), special_modes: !!(buf[30] & 2),
+    mappings: [],
   };
   for (let i = 0; i < n; i++) {
     const o = CFG.HEADER + i * CFG.ENTRY;
     cfg.mappings.push({
-      control: buf[o], page: buf[o + 1] & 15, shift: !!(buf[o + 1] & 16), type: CFG.TYPES[buf[o + 2]],
+      mode: buf[o + 1] & CFG.LAYER_DAW ? 'daw' : 'cc',
+      control: buf[o], page: buf[o + 1] & 15, shift: !!(buf[o + 1] & CFG.LAYER_SHIFT), type: CFG.TYPES[buf[o + 2]],
       channel: buf[o + 3] + 1, number: buf[o + 4], flags: buf[o + 5], min: buf[o + 6], max: buf[o + 7],
     });
   }
   return cfg;
 }
 
+// A configuration from an imported file: older exports (base: 'opxy' / 'daw', no mode on mappings)
+// are brought up to date.
+function normalizeConfig(obj) {
+  const cfg = Object.assign(defaultConfig(), obj);
+  if (obj.base !== undefined && obj.mode === undefined) cfg.mode = obj.base === 'daw' ? 'daw' : 'cc';
+  delete cfg.base;
+  cfg.mappings = (cfg.mappings || []).map(m => Object.assign({ mode: obj.base === 'daw' ? 'daw' : 'cc' }, m));
+  return cfg;
+}
+
+// ---- templates
+
+function templateFromConfig(cfg, meta) {
+  const settings = {};
+  for (const k of TEMPLATE_SETTINGS) settings[k] = Array.isArray(cfg[k]) ? cfg[k].slice() : cfg[k];
+  delete settings.name;
+  return {
+    format: 1, name: meta.name, device: meta.device, author: meta.author, description: meta.description || '',
+    settings,
+    mappings: cfg.mappings.filter(m => m.mode === 'cc').map(m => {
+      const { mode, ...rest } = m;
+      return rest;
+    }),
+  };
+}
+
+// Problems with a template (empty: fine). Names carry their author: "OP-XY - blen2r".
+function checkTemplate(t) {
+  const out = [];
+  for (const k of ['name', 'device', 'author']) if (!t[k] || typeof t[k] !== 'string') out.push(`missing "${k}"`);
+  if (t.name && t.author && !t.name.includes(` - ${t.author}`)) out.push(`the name must contain " - ${t.author}" ("OP-XY - ${t.author}", "OP-XY - ${t.author} alt 1")`);
+  if (t.name && t.name.length > CFG.NAME_LEN) out.push(`the name is longer than ${CFG.NAME_LEN} characters`);
+  if (!t.settings || typeof t.settings !== 'object') out.push('missing "settings"');
+  if (!Array.isArray(t.mappings)) out.push('missing "mappings"');
+  else {
+    try {
+      const cfg = applyTemplate(defaultConfig(), t);
+      decodeConfig(encodeConfig(cfg));
+    } catch (e) { out.push(e.message); }
+  }
+  return out;
+}
+
+// CC mode's part of cfg replaced by the template's; DAW mode's mappings and the personal settings
+// (takeover, LED, acceleration, remembering) stay.
+function applyTemplate(cfg, t) {
+  const out = JSON.parse(JSON.stringify(cfg));
+  for (const k of TEMPLATE_SETTINGS) if (t.settings && t.settings[k] !== undefined) out[k] = JSON.parse(JSON.stringify(t.settings[k]));
+  out.name = t.name;
+  out.mappings = out.mappings.filter(m => m.mode !== 'cc')
+    .concat((t.mappings || []).map(m => Object.assign({ mode: 'cc' }, m, { mode: 'cc' })));
+  return out;
+}
+
 // The mapping that applies to a control on a page / layer, as the firmware resolves it.
 // Returns { mapping, from: 'here'|'page'|'all+shift'|'all' } or null (base).
-function resolveMapping(cfg, control, page, shift) {
+function resolveMapping(cfg, control, page, shift, mode) {
   const order = [[page, true], [page, false], [0, true], [0, false]];
   for (const [pg, sh] of order) {
     if (sh && !shift) continue;
     if (pg && !page) continue;
-    const ms = cfg.mappings.filter(m => m.control === control && m.page === pg && m.shift === sh);
+    const ms = cfg.mappings.filter(m => m.mode === mode && m.control === control && m.page === pg && m.shift === sh);
     if (ms.length) {
       const m = ms[ms.length - 1];
       const from = pg === page && sh === shift ? 'here' : `${pg ? 'page ' + pg : 'all pages'}${sh ? ' + Shift' : ''}`;
@@ -201,5 +307,6 @@ function unpack7(data) {
 
 if (typeof module !== 'undefined') {
   module.exports = { CFG, CONTROLS, crc32, defaultConfig, encodeConfig, decodeConfig, resolveMapping,
-                     pack7, unpack7, baseDescription, baseShort };
+                     pack7, unpack7, baseDescription, baseShort, reservedFor, normalizeConfig,
+                     templateFromConfig, checkTemplate, applyTemplate, PROFILE_FIELDS, TEMPLATE_SETTINGS };
 }

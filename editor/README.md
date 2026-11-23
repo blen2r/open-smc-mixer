@@ -1,7 +1,8 @@
 # SMC-Mixer editor
 
 A static web page that edits the mixer's configuration over USB-MIDI (Web MIDI, with SysEx):
-mappings per page and Shift layer, the base profile and global settings, a live monitor, JSON
+DAW / CC mode, mappings per mode, page and Shift layer, CC mode's profile and device templates,
+global settings, a live monitor, JSON
 import / export, and a simulated mixer for working without the hardware. The model and the
 protocol are in [docs/mixer-config.md](../docs/mixer-config.md); the firmware side is
 `fw/smcpad/examples/mixer/mixer_config.c`.
@@ -19,23 +20,23 @@ in the browser.
 
 ## Use it
 
-- Pick a **page** (or *All pages*) and a **layer** (*Normal* / *Shift held*), click a control on
-  the drawing, set what it sends. Orange = mapped on this page and layer, blue = inherited from a
-  broader one, grey = what the base profile does. The firmware resolves page + Shift, page, all
-  pages + Shift, all pages, then the base profile.
+- Pick a **mode** (*DAW* / *CC*: each has its own mappings), a **page** (or *All pages*) and a
+  **layer** (*Normal* / *Shift held*), click a control on the drawing, set what it sends. Orange =
+  mapped on this page and layer, blue = inherited from a broader one, grey = what the mode does by
+  itself (DAW: the stock Mackie layout; CC: the profile). The firmware resolves page + Shift, page,
+  all pages + Shift, all pages, then the mode.
+- **Settings**: the mixer's mode (also Shift + Left / Right on the mixer), CC mode's profile,
+  **Choose a template…** and **Save as template…** ([templates/README.md](templates/README.md)).
 - **Copy to all pages** moves a mapping to the all-pages layer (e.g. a Shift + fader macro that
   works on every page).
 - **Save to mixer** sends the whole configuration; the mixer checks it (CRC) before storing it.
 - **Monitor**: every MIDI message the mixer sends; with *highlight controls*, the drawing lights
   up the control you touch and moves the fader caps.
 
-Files: `config.js` (format, encode / decode, resolution, base profile descriptions; also loads in
+Files: `config.js` (format, encode / decode, resolution, templates, the modes' descriptions; also loads in
 Node for tests), `device.js` (Web MIDI and the simulated mixer), `app.js` (the page).
 
 ## QA
 
-`host/mixer_qa.py` (Python with `mido`) checks the editor and the firmware together: you import
-`host/qa/qa_config.json` in the editor, make four listed changes and save; the script reads the
-configuration back and compares it, then walks you through 28 hardware checks ("turn knob 1 right")
-and verifies the MIDI the mixer sends on USB. Your configuration is backed up first and restored at
-the end. `--no-editor` skips the editor part, `--from N` resumes at a check.
+See [QA.md](../QA.md): `host/selftest.py` offline, `host/mixer_qa.py` on the hardware (the editor
+round trip and 36 guided checks).

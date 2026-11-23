@@ -6,7 +6,7 @@
     python3 host/mixer_qa.py --from 12      # start the hardware checks at check 12
 
 1. Your current configuration is saved to work/qa_backup_<time>.json (and restored at the end).
-2. Editor: you import host/qa/qa_config.json in the web editor, make four listed changes and save.
+2. Editor: you import host/qa/qa_config.json in the web editor, make five listed changes (in both modes) and save.
    The script reads the configuration back and checks it is exactly the QA one plus the changes.
 3. Hardware: the script asks for one action at a time ("turn knob 1 right") and checks the MIDI the
    mixer sends on USB. It knows which control you touched (editor events), so a wrong control or
@@ -25,7 +25,7 @@ import time
 
 import mido
 
-from mixer_cfg import Mixer, decode, encode, unpack7
+from mixer_cfg import Mixer, decode, encode, normalize, unpack7
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 QA_CONFIG = os.path.join(HERE, "qa", "qa_config.json")
@@ -123,12 +123,12 @@ def any_of(*ps):
 EDITOR_STEPS = """\
 In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
   1. Connect (USB), then {bold}Import{off} host/qa/qa_config.json and {bold}Save to mixer{off}.
-  2. Make these four changes:
-     a. Page "All", Normal layer: click {bold}Knob 1{off}, change the CC number 20 -> {bold}22{off}.
-     b. Page "All", Normal layer: click {bold}Strip 4 Mute{off} (marked disabled), click {bold}Remove mapping{off}.
-     c. Page "All", Normal layer: click {bold}Down{off}, Type CC, channel 1, CC number {bold}52{off},
-        Button {bold}toggle{off}.
+  2. Make these five changes (Mode bar on {bold}CC{off}, page "All pages", layer Normal, unless said):
+     a. Click {bold}Knob 1{off}, change the CC number 20 -> {bold}22{off}.
+     b. Click {bold}Strip 4 Mute{off} (marked disabled), click {bold}Remove mapping{off}.
+     c. Click {bold}Down{off}: Type CC, channel 1, CC number {bold}52{off}, Button {bold}toggle{off}.
      d. Settings: {bold}Pages 3{off}.
+     e. Mode bar on {bold}DAW{off}: click {bold}Down{off}: Type CC, channel 1, CC number {bold}71{off} (momentary).
   3. {bold}Save to mixer{off}. (Leave the editor open; you can tick "highlight controls" and watch the
      monitor during the hardware checks.)
 """
@@ -139,18 +139,21 @@ def expected_config():
     ms = cfg["mappings"]
     next(m for m in ms if m["control"] == KNOB(1))["number"] = 22
     cfg["mappings"] = [m for m in ms if m["control"] != STRIP(4, "mute")]
-    cfg["mappings"].append(dict(control=BTN["down"], page=0, shift=False, type="cc", channel=1, number=52,
+    cfg["mappings"].append(dict(mode="cc", control=BTN["down"], page=0, shift=False, type="cc", channel=1, number=52,
                                 flags=1, min=0, max=127))
+    cfg["mappings"].append(dict(mode="daw", control=BTN["down"], page=0, shift=False, type="cc", channel=1,
+                                number=71, flags=0, min=0, max=127))
     cfg["pages"] = 3
     return cfg
 
 
 def mapping_key(m):
-    return (m["control"], m["page"], m["shift"])
+    return (m.get("mode", "cc"), m["control"], m["page"], m["shift"])
 
 
 def mapping_text(m):
-    layer = f"{'page ' + str(m['page']) if m['page'] else 'all pages'}{' + Shift' if m['shift'] else ''}"
+    layer = (f"{m.get('mode', 'cc').upper()}, {'page ' + str(m['page']) if m['page'] else 'all pages'}"
+             f"{' + Shift' if m['shift'] else ''}")
     return (f"{control_name(m['control'])} [{layer}]: {m['type']} ch{m['channel']} #{m['number']} "
             f"flags {m['flags']} range {m['min']}..{m['max']}")
 
@@ -178,6 +181,7 @@ def compare(got, want):
 
 def looks_like_qa(cfg):
     """Most of the QA mappings are there (the QA configuration, with or without the editor changes)."""
+    cfg = normalize(cfg) if "base" in cfg else cfg
     qa = {mapping_key(m) for m in json.load(open(QA_CONFIG))["mappings"]}
     return len(qa & {mapping_key(m) for m in cfg["mappings"]}) >= len(qa) // 2
 
@@ -191,17 +195,29 @@ def strip_version(cfg):
 # ---- the hardware checks
 
 def C(say, ctl=None, need=(), allow=None, silent=False, page=None, shift=None, prep=None, ask=None,
-      exact=None, unordered=False):
+      exact=None, unordered=False, after=None):
     """One check. need: messages that must come, in this order. allow: what every message must match
     (default: any of need). silent: nothing may be sent. exact: the number of messages expected.
-    unordered: need in any order."""
+    unordered: need in any order. after: a function returning problems, run once the check passed."""
     if allow is None and need:
         allow = any_of(*need)
     return dict(say=say, ctl=ctl, need=list(need), allow=allow, silent=silent, page=page, shift=shift,
-                prep=prep, ask=ask, exact=exact, unordered=unordered)
+                prep=prep, ask=ask, exact=exact, unordered=unordered, after=after)
 
 
 def checks(qa):
+    def stored_mode(want):
+        def f():
+            got = qa.m.hello().get("mode")
+            cfg_mode = decode(qa.m.read())["mode"]
+            out = []
+            if got != want:
+                out.append(f"the mixer says it is in {got} mode, expected {want}")
+            if cfg_mode != want:
+                out.append(f"the stored configuration says {cfg_mode} mode, expected {want} (not kept)")
+            return out
+        return f
+
     def pickup_prep():
         input(f"   Put {BOLD}fader 3 all the way down{OFF}, then press Enter ")
         time.sleep(2)                       # past the echo window of the fader's own last values
@@ -262,6 +278,24 @@ def checks(qa):
         C("Move fader 1 (page 3: volume of track 1).", ctl=FADER(1), page=3, need=[cc(1, 7)]),
         C("Press Shift + Rewind twice, back to page 1. Then press Enter.", ctl=BTN["rewind"], silent=True,
           shift=True),
+        # modes
+        C("Hold Shift and press Left (DAW mode). Keep holding Shift a second, then let go and press Enter.",
+          ctl=BTN["left"], silent=True, shift=True, after=stored_mode("daw"),
+          ask="While Shift was held, was the Left arrow lit (and Right off)?"),
+        C("Move fader 1 (DAW mode: pitch bend ch 1, with the touch note 104).", ctl=FADER(1),
+          need=[note_on(1, 104), pitchbend(1)], allow=any_of(pitchbend(1), note_on(1, 104), note_off(1, 104))),
+        C("Turn knob 1 to the right a little (DAW mode: V-Pot, CC 16 relative).", ctl=KNOB(1),
+          need=[cc(1, 16, 1, 63)]),
+        C("Press and release Strip 1 Mute (DAW mode: note 16; the CC-mode mapping must not apply).",
+          ctl=STRIP(1, "mute"), need=[note_on(1, 16), note_off(1, 16)], exact=2),
+        C("Press and release Down (a DAW-mode mapping from the editor: CC 71, momentary).", ctl=BTN["down"],
+          need=[cc(1, 71, value=127), cc(1, 71, value=0)], exact=2),
+        C("Press and release Up (a DAW-mode mapping from the QA file: CC 70, momentary).", ctl=BTN["up"],
+          need=[cc(1, 70, value=127), cc(1, 70, value=0)], exact=2),
+        C("Hold Shift and press Right (back to CC mode). Then press Enter.", ctl=BTN["right"], silent=True,
+          shift=True, after=stored_mode("cc"), ask="While Shift was held, was the Right arrow lit?"),
+        C("Press Down twice (CC mode again: toggle CC 52).", ctl=BTN["down"],
+          need=[cc(1, 52, value=127), cc(1, 52, value=0)], exact=2),
     ]
 
 
@@ -325,6 +359,8 @@ class QA:
             print(f"   {YEL}skipped{OFF}")
             return None
         problems = self.evaluate(c, msgs, evs)
+        if not problems and c["after"]:
+            problems += c["after"]()
         if not problems and c["ask"]:
             a = input(f"   {c['ask']} [y/n] ").strip().lower()
             if not a.startswith("y"):
@@ -383,7 +419,7 @@ def main():
     h = m.hello()
     print(f"mixer: firmware {h['fw']}, configuration {h['length']} bytes, page {h['page']}")
     os.makedirs(WORK, exist_ok=True)
-    current = strip_version(decode(m.read()))
+    current = decode(m.read())
     if looks_like_qa(current):
         # a QA run left its configuration on the mixer: yours is the latest backup that is not QA
         olds = [os.path.join(WORK, f) for f in sorted(os.listdir(WORK)) if f.startswith("qa_backup_")]
@@ -391,7 +427,7 @@ def main():
         if not olds:
             sys.exit("the mixer holds the QA configuration and there is no backup of yours in work/")
         backup = olds[-1]
-        original = json.load(open(backup))
+        original = normalize(json.load(open(backup)))
         print(f"the mixer still holds the QA configuration; yours is {backup}")
     else:
         backup = os.path.join(WORK, time.strftime("qa_backup_%Y%m%d_%H%M%S.json"))
@@ -407,7 +443,7 @@ def main():
         print("\n" + EDITOR_STEPS.format(bold=BOLD, off=OFF))
         while True:
             input("Press Enter once you saved in the editor ")
-            diffs = compare(strip_version(decode(m.read())), want)
+            diffs = compare(decode(m.read()), want)
             if not diffs:
                 print(f"{GREEN}PASS{OFF} editor: the mixer holds exactly the QA configuration with your four changes")
                 break

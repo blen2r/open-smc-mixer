@@ -2,7 +2,8 @@
 'use strict';
 
 const $ = s => document.querySelector(s);
-const state = { link: null, cfg: null, saved: '', page: 0, shift: false, sel: null, faders: new Array(8).fill(0) };
+const state = { link: null, cfg: null, saved: '', page: 0, shift: false, mode: 'daw', sel: null, loadedMode: null,
+                templates: [], faders: new Array(8).fill(0) };
 
 function toast(msg, err) {
   const t = $('#toast');
@@ -36,9 +37,10 @@ function mappingText(m) {
 
 function controlInfo(id) {
   const cfg = state.cfg;
-  const r = resolveMapping(cfg, id, state.page, state.shift);
-  if (CONTROLS[id].reserved) return { cls: 'reserved', text: 'reserved' };
-  if (!r || r.base) return { cls: 'base', text: baseShort(cfg, id, state.page, state.shift), full: baseDescription(cfg, id, state.page, state.shift) };
+  const r = resolveMapping(cfg, id, state.page, state.shift, state.mode);
+  const res = reservedFor(id, state.shift);
+  if (res) return { cls: 'reserved', text: res, full: `${res} (reserved)` };
+  if (!r || r.base) return { cls: 'base', text: baseShort(cfg, id, state.page, state.shift, state.mode), full: baseDescription(cfg, id, state.page, state.shift, state.mode) };
   const cls = r.from === 'here' ? 'here' : 'inherited';
   return { cls: (r.mapping.type === 'disabled' ? 'disabled ' : '') + cls, text: mappingText(r.mapping), from: r.from };
 }
@@ -84,7 +86,7 @@ function refreshSurface() {
   document.querySelectorAll('.ctl').forEach(el => {
     const id = +el.dataset.id;
     const info = controlInfo(id);
-    el.classList.remove('here', 'inherited', 'base', 'disabled');
+    el.classList.remove('here', 'inherited', 'base', 'disabled', 'reserved');
     info.cls.split(' ').forEach(c => c && el.classList.add(c));
     el.classList.toggle('sel', id === state.sel);
     el.querySelector('.v').textContent = info.text;
@@ -102,6 +104,7 @@ function refreshSurface() {
   mk('All pages', 0);
   for (let p = 1; p <= state.cfg.pages; p++) mk(String(p), p);
   document.querySelectorAll('#layers button').forEach(b => b.classList.toggle('on', (b.dataset.shift === '1') === state.shift));
+  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
 }
 
 // ------------------------------------------------------------------ control editor
@@ -112,12 +115,12 @@ function select(id) {
 }
 
 function findHere(id) {
-  return state.cfg.mappings.find(m => m.control === id && m.page === state.page && m.shift === state.shift);
+  return state.cfg.mappings.find(m => m.mode === state.mode && m.control === id && m.page === state.page && m.shift === state.shift);
 }
 
 function setHere(id, m) {
-  const ms = state.cfg.mappings.filter(x => !(x.control === id && x.page === state.page && x.shift === state.shift));
-  if (m) ms.push(Object.assign({ control: id, page: state.page, shift: state.shift }, m));
+  const ms = state.cfg.mappings.filter(x => !(x.mode === state.mode && x.control === id && x.page === state.page && x.shift === state.shift));
+  if (m) ms.push(Object.assign({ mode: state.mode, control: id, page: state.page, shift: state.shift }, m));
   state.cfg.mappings = ms;
   refreshAll();
 }
@@ -134,12 +137,17 @@ function renderEditor() {
   }
   const id = state.sel, c = CONTROLS[id];
   const here = findHere(id);
-  const r = resolveMapping(state.cfg, id, state.page, state.shift);
-  const layer = `${state.page ? 'page ' + state.page : 'all pages'}${state.shift ? ' + Shift' : ''}`;
+  const r = resolveMapping(state.cfg, id, state.page, state.shift, state.mode);
+  const layer = `${state.mode === 'daw' ? 'DAW' : 'CC'} mode, ${state.page ? 'page ' + state.page : 'all pages'}${state.shift ? ' + Shift' : ''}`;
+  const res = reservedFor(id, state.shift);
+  if (res) {
+    p.innerHTML = `<h2>${c.name}</h2><div class="src">${state.shift ? 'Shift + ' : ''}${c.name} is reserved: <b>${res}</b>.</div>`;
+    return;
+  }
   let src;
   if (here) src = `Mapped on <b>${layer}</b>.`;
   else if (r && !r.base) src = `Not mapped on ${layer}: inherits <b>${mappingText(r.mapping)}</b> from ${r.from}.`;
-  else src = `Not mapped: the base profile does <b>${baseDescription(state.cfg, id, state.page, state.shift)}</b>.`;
+  else src = `Not mapped on ${layer}: ${state.mode === 'daw' ? 'DAW mode' : 'CC mode'} does <b>${baseDescription(state.cfg, id, state.page, state.shift, state.mode)}</b>.`;
 
   const m = here || { type: 'inherit', channel: 1, number: 0, flags: 0, min: 0, max: 127 };
   const types = ['inherit', 'disabled', 'cc', 'note', 'program', 'pitchbend', 'pressure', 'base'];
@@ -192,8 +200,8 @@ function renderEditor() {
     const m2 = findHere(id) || (r && r.mapping);
     if (!m2) { toast('nothing mapped here to copy'); return; }
     const copy = Object.assign({}, m2);
-    state.cfg.mappings = state.cfg.mappings.filter(x => !(x.control === id && x.shift === state.shift));
-    state.cfg.mappings.push(Object.assign(copy, { control: id, page: 0, shift: state.shift }));
+    state.cfg.mappings = state.cfg.mappings.filter(x => !(x.mode === state.mode && x.control === id && x.shift === state.shift));
+    state.cfg.mappings.push(Object.assign(copy, { mode: state.mode, control: id, page: 0, shift: state.shift }));
     state.page = 0;
     refreshAll();
   };
@@ -213,8 +221,20 @@ function renderGlobals() {
   if (!state.cfg) { p.innerHTML = '<h2>Settings</h2><p class="hint">Connect or simulate a mixer.</p>'; return; }
   const g = state.cfg;
   const opt = (v, cur, label) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
+  const ccIn = (id, v, none) => `<input type="number" id="${id}" min="0" max="127" value="${v === null ? '' : v}" placeholder="${none ? 'none' : ''}">`;
   let html = '<h2>Settings</h2>';
-  html += field('Base profile', `<select id="gBase">${opt('opxy', g.base, 'OP-XY')}${opt('daw', g.base, 'DAW (Mackie)')}</select>`);
+  html += field('Mixer mode', `<select id="gMode">${opt('daw', g.mode, 'DAW (Mackie, as stock)')}${opt('cc', g.mode, 'CC')}</select>`);
+  html += '<p class="hint">On the mixer: Shift + Left = DAW, Shift + Right = CC (the lit arrow shows the mode while Shift is held). The mode is kept across power cycles.</p>';
+  html += '<h3>CC mode profile</h3>';
+  html += `<div class="src">Template: <b>${g.name ? esc(g.name) : 'custom'}</b></div>`;
+  html += '<div class="row"><button id="gPick">Choose a template…</button><button id="gSaveTpl">Save as template…</button></div>';
+  html += field('Fader CC', ccIn('gCcF', g.cc_fader));
+  html += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true) + '<span class="hint">empty: as without Shift</span>');
+  html += field('Mute CC', ccIn('gCcM', g.cc_mute, true) + '<span class="hint">toggles 127 / 0; empty: Mute sends nothing</span>');
+  html += field('Solo', `<label><input type="checkbox" id="gSolo" ${g.solo_mutes ? 'checked' : ''}> mutes the other tracks</label>`);
+  html += field('Knob CC', ccIn('gCcK', g.cc_knob));
+  html += field('Focus CCs', ccIn('gCcFo', g.cc_focus, true) + '<span class="hint">Rec / Select: knobs 1-4 / 5-8 send this CC and the 3 next of that track; empty: off</span>');
+  html += field('Special modes', `<label><input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}> Shift + Mute / Solo / Rec / Select: fader = mod wheel / pitch bend / pressure / pan</label>`);
   html += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`);
   html += '<h3>Track of strip 1, per page</h3><div class="tb">' +
     g.track_base.map((t, i) => `<label>page ${i + 1}<input type="number" class="gTb" data-i="${i}" min="1" max="16" value="${t + 1}"></label>`).join('') + '</div>';
@@ -229,10 +249,19 @@ function renderGlobals() {
   html += field('x3 under', `<input type="number" id="gA3" min="1" max="100" value="${g.accel_ms_x3}"> ms between steps`);
   html += field('x2 under', `<input type="number" id="gA2" min="1" max="100" value="${g.accel_ms_x2}"> ms`);
   p.innerHTML = html;
-  const upd = () => {
-    g.base = $('#gBase').value;
+  const cc = (sel, none) => { const v = $(sel).value.trim(); return v === '' && none ? null : Math.max(0, Math.min(127, +v || 0)); };
+  const upd = e => {
+    const before = JSON.stringify(PROFILE_FIELDS.filter(k => k !== 'name').map(k => g[k]));
+    g.mode = $('#gMode').value;
+    g.cc_fader = cc('#gCcF');
+    g.cc_fader_shift = cc('#gCcFS', true);
+    g.cc_mute = cc('#gCcM', true);
+    g.solo_mutes = $('#gSolo').checked;
+    g.cc_knob = cc('#gCcK');
+    g.cc_focus = cc('#gCcFo', true);
+    g.special_modes = $('#gSpecial').checked;
     g.pages = Math.max(1, Math.min(8, +$('#gPages').value || 1));
-    document.querySelectorAll('.gTb').forEach(e => { g.track_base[+e.dataset.i] = Math.max(1, Math.min(16, +e.value || 1)) - 1; });
+    document.querySelectorAll('.gTb').forEach(el => { g.track_base[+el.dataset.i] = Math.max(1, Math.min(16, +el.value || 1)) - 1; });
     g.fader_takeover = $('#gTk').value;
     g.fader_led = $('#gLed').checked;
     g.follow_incoming = $('#gFollow').checked;
@@ -240,10 +269,145 @@ function renderGlobals() {
     g.accel = $('#gAccel').checked;
     g.accel_ms_x3 = Math.max(1, Math.min(100, +$('#gA3').value || 6));
     g.accel_ms_x2 = Math.max(1, Math.min(100, +$('#gA2').value || 12));
+    // the profile edited by hand is no longer the template's
+    if (JSON.stringify(PROFILE_FIELDS.filter(k => k !== 'name').map(k => g[k])) !== before) g.name = '';
+    if (e && e.target.id === 'gMode') state.mode = g.mode;
     if (state.page > g.pages) state.page = 0;
     refreshAll();
   };
   p.querySelectorAll('select, input').forEach(e => { e.onchange = upd; });
+  $('#gPick').onclick = openPicker;
+  $('#gSaveTpl').onclick = saveTemplate;
+}
+
+function esc(t) {
+  return String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+}
+
+// ------------------------------------------------------------------ templates
+
+const STARS_KEY = 'smc-mixer-stars';
+function stars() {
+  try { return new Set(JSON.parse(localStorage.getItem(STARS_KEY) || '[]')); } catch (e) { return new Set(); }
+}
+function setStar(name, on) {
+  const s = stars();
+  if (on) s.add(name); else s.delete(name);
+  try { localStorage.setItem(STARS_KEY, JSON.stringify([...s])); } catch (e) { /* private mode */ }
+}
+
+// templates/index.json (in the repository) and templates/local/index.json (yours, not committed);
+// both written by host/templates_index.py
+async function loadTemplates() {
+  const list = [];
+  for (const [dir, local] of [['templates/', false], ['templates/local/', true]]) {
+    try {
+      const r = await fetch(dir + 'index.json', { cache: 'no-store' });
+      if (!r.ok) continue;
+      for (const t of await r.json()) list.push(Object.assign({}, t, { base: dir, local }));
+    } catch (e) { /* none */ }
+  }
+  state.templates = list;
+  return list;
+}
+
+async function openPicker() {
+  await loadTemplates();
+  const dlg = $('#picker');
+  dlg.showModal();
+  renderPicker();
+}
+
+function renderPicker() {
+  const q = $('#pkSearch').value.trim().toLowerCase();
+  const onlyStars = $('#pkStars').checked;
+  const st = stars();
+  const rows = state.templates
+    .filter(t => !onlyStars || st.has(t.name))
+    .filter(t => !q || [t.name, t.device, t.author, t.description].join(' ').toLowerCase().includes(q))
+    .sort((a, b) => (st.has(b.name) - st.has(a.name)) || a.name.localeCompare(b.name));
+  const box = $('#pkList');
+  if (!state.templates.length) {
+    box.innerHTML = '<p class="hint">No templates found (templates/index.json). Run host/templates_index.py.</p>';
+    return;
+  }
+  box.innerHTML = rows.map((t, i) => `<div class="tpl">
+      <button class="star ${st.has(t.name) ? 'on' : ''}" data-i="${i}" title="favourite">${st.has(t.name) ? '★' : '☆'}</button>
+      <div class="tplText"><b>${esc(t.name)}</b>${t.local ? ' <span class="hint">(local)</span>' : ''}<br>
+        <span class="hint">${esc(t.device)}${t.description ? ' · ' + esc(t.description) : ''}</span>
+        ${t.doc ? `<br><a href="${esc(t.base + t.doc)}" target="_blank" rel="noopener">How it's mapped</a>` : ''}</div>
+      <button class="apply" data-i="${i}">Use</button></div>`).join('') || '<p class="hint">No template matches.</p>';
+  box.querySelectorAll('.star').forEach(b => { b.onclick = () => { const t = rows[+b.dataset.i]; setStar(t.name, !st.has(t.name)); renderPicker(); }; });
+  box.querySelectorAll('.apply').forEach(b => { b.onclick = () => useTemplate(rows[+b.dataset.i]); });
+}
+
+async function useTemplate(entry) {
+  try {
+    const r = await fetch(entry.base + entry.file, { cache: 'no-store' });
+    const t = await r.json();
+    const problems = checkTemplate(t);
+    if (problems.length) throw new Error(problems.join('; '));
+    const ccMaps = state.cfg.mappings.filter(m => m.mode === 'cc').length;
+    if (ccMaps && !confirm(`Replace CC mode's profile and its ${ccMaps} mapping(s) with "${t.name}"? (DAW mode is not touched.)`)) return;
+    state.cfg = applyTemplate(state.cfg, t);
+    state.mode = 'cc';
+    $('#picker').close();
+    refreshAll();
+    toast(`"${t.name}" loaded: press "Save to mixer" to send it (Shift + Right on the mixer: CC mode)`);
+  } catch (e) { toast(`template: ${e.message}`, true); }
+}
+
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// A description of a template's mapping, to start its .md from
+function templateDoc(t) {
+  const s = t.settings;
+  const cc = v => (v === null ? '—' : `CC ${v}`);
+  const lines = [`# ${t.name}`, '', `For: ${t.device}. By ${t.author}.`, '', t.description || '_What it is for._', '',
+    '## CC mode', '', '| control | sends |', '|---|---|',
+    `| fader | ${cc(s.cc_fader)} on the strip's channel |`,
+    `| Shift + fader | ${s.cc_fader_shift === null ? 'as without Shift' : cc(s.cc_fader_shift)} |`,
+    `| knob | ${cc(s.cc_knob)} on the strip's channel |`,
+    `| Mute | ${s.cc_mute === null ? 'nothing' : `toggles ${cc(s.cc_mute)} 127 / 0`} |`,
+    `| Solo | ${s.solo_mutes && s.cc_mute !== null ? 'mutes the other tracks' : 'nothing'} |`,
+    `| Rec / Select | ${s.cc_focus === null ? 'nothing' : `knobs 1-4 / 5-8 send CC ${s.cc_focus}-${s.cc_focus + 3} of that track`} |`,
+    `| Shift + Mute / Solo / Rec / Select | ${s.special_modes ? 'fader special modes: mod wheel / pitch bend / pressure / pan' : 'as without Shift'} |`,
+    '', `Pages: ${s.pages}; strip 1 is track ${s.track_base.slice(0, s.pages).map(x => x + 1).join(' / ')} on page ${[...Array(s.pages).keys()].map(x => x + 1).join(' / ')}.`, ''];
+  if (t.mappings.length) {
+    lines.push('## Mappings', '', '| control | layer | sends |', '|---|---|---|');
+    for (const m of t.mappings) {
+      lines.push(`| ${CONTROLS[m.control].name} | ${m.page ? 'page ' + m.page : 'all pages'}${m.shift ? ' + Shift' : ''} | ${mappingText(m)}${m.min || m.max !== 127 ? ` (${m.min}..${m.max})` : ''} |`);
+    }
+    lines.push('');
+  }
+  lines.push('## Notes', '', '_Anything the device needs (its MIDI settings, channels), and what does not work._', '');
+  return lines.join('\n');
+}
+
+function saveTemplate() {
+  const author = prompt('Your name or GitHub handle (the template is named after it, e.g. "OP-XY - blen2r"):');
+  if (!author) return;
+  const device = prompt('The device it is for (e.g. "Teenage Engineering OP-XY"):');
+  if (!device) return;
+  const name = prompt(`Template name (at most ${CFG.NAME_LEN} characters, must contain " - ${author}"):`, `${device.split(' ').pop()} - ${author}`);
+  if (!name) return;
+  const description = prompt('One line on what it does (optional):') || '';
+  const t = templateFromConfig(state.cfg, { name, device, author, description });
+  const problems = checkTemplate(t);
+  if (problems.length) { toast(problems.join('; '), true); return; }
+  const file = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  download(`${file}.json`, JSON.stringify(t, null, 1) + '\n', 'application/json');
+  download(`${file}.md`, templateDoc(t), 'text/markdown');
+  state.cfg.name = name;
+  refreshAll();
+  toast(`saved ${file}.json and ${file}.md: put them in editor/templates/local/ (yours) or editor/templates/ (to share), then run host/templates_index.py`);
 }
 
 function refreshAll() {
@@ -305,6 +469,7 @@ async function useLink(link) {
     const h = await link.hello();
     state.cfg = await link.readConfig();
     state.saved = JSON.stringify(state.cfg);
+    state.mode = state.loadedMode = state.cfg.mode;
     $('#status').innerHTML = `<b>${link.name}</b> · firmware ${h.fw} · page ${h.page}`;
     ['#btnReload', '#btnExport', '#btnImport', '#btnFactory'].forEach(s => { $(s).disabled = false; });
     if ($('#chkEvents').checked) await link.events(true);
@@ -320,12 +485,17 @@ $('#btnConnect').onclick = async () => {
 };
 $('#btnSim').onclick = () => useLink(new SimulatedLink());
 $('#btnReload').onclick = async () => {
-  try { state.cfg = await state.link.readConfig(); state.saved = JSON.stringify(state.cfg); refreshAll(); toast('reloaded from the mixer'); } catch (e) { toast(e.message, true); }
+  try { state.cfg = await state.link.readConfig(); state.saved = JSON.stringify(state.cfg); state.mode = state.loadedMode = state.cfg.mode; refreshAll(); toast('reloaded from the mixer'); } catch (e) { toast(e.message, true); }
 };
 $('#btnSave').onclick = async () => {
   try {
     $('#btnSave').disabled = true;
+    // the mode switched on the mixer (Shift + Left / Right) since it was read wins, unless it was
+    // changed here too
+    const h = await state.link.hello();
+    if (state.cfg.mode === state.loadedMode && h.mode !== undefined && CFG.MODES[h.mode] !== state.cfg.mode) state.cfg.mode = CFG.MODES[h.mode];
     await state.link.writeConfig(state.cfg);
+    state.loadedMode = state.cfg.mode;
     state.saved = JSON.stringify(state.cfg);
     markDirty();
     toast('saved to the mixer');
@@ -333,7 +503,7 @@ $('#btnSave').onclick = async () => {
 };
 $('#btnFactory').onclick = async () => {
   if (!confirm('Erase every mapping and setting on the mixer and go back to the defaults?')) return;
-  try { await state.link.factoryReset(); state.cfg = await state.link.readConfig(); state.saved = JSON.stringify(state.cfg); refreshAll(); toast('factory settings'); } catch (e) { toast(e.message, true); }
+  try { await state.link.factoryReset(); state.cfg = await state.link.readConfig(); state.saved = JSON.stringify(state.cfg); state.mode = state.loadedMode = state.cfg.mode; refreshAll(); toast('factory settings'); } catch (e) { toast(e.message, true); }
 };
 $('#btnExport').onclick = () => {
   const blob = new Blob([JSON.stringify(state.cfg, null, 1)], { type: 'application/json' });
@@ -348,7 +518,7 @@ $('#fileImport').onchange = async e => {
   const f = e.target.files[0];
   if (!f) return;
   try {
-    const cfg = Object.assign(defaultConfig(), JSON.parse(await f.text()));
+    const cfg = normalizeConfig(JSON.parse(await f.text()));
     encodeConfig(cfg);                  // validates
     state.cfg = cfg;
     refreshAll();
@@ -360,6 +530,10 @@ $('#chkEvents').onchange = async e => {
   if (state.link) { try { await state.link.events(e.target.checked); } catch (err) { toast(err.message, true); } }
 };
 document.querySelectorAll('#layers button').forEach(b => { b.onclick = () => { state.shift = b.dataset.shift === '1'; refreshAll(); }; });
+document.querySelectorAll('#modes button').forEach(b => { b.onclick = () => { state.mode = b.dataset.mode; refreshAll(); }; });
+$('#pkSearch').oninput = renderPicker;
+$('#pkStars').onchange = renderPicker;
+$('#pkClose').onclick = () => $('#picker').close();
 window.addEventListener('beforeunload', e => { if (state.cfg && JSON.stringify(state.cfg) !== state.saved) { e.preventDefault(); e.returnValue = ''; } });
 
 buildSurface();

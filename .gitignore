@@ -28,3 +28,7 @@ tools/jl-postbuild/
 # Local tool configuration and working captures
 .mcp.json
 *.mmon
+
+# Personal editor templates (editor/templates/local/): yours, not shared
+editor/templates/local/*
+!editor/templates/local/README.md

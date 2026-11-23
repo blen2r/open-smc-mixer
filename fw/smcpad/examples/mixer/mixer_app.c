@@ -4,21 +4,24 @@
  * For every control event the configuration is asked first (mixer_config.c: page + Shift, page,
  * all pages + Shift, all pages); only when nothing is mapped does the base profile act:
  *
- * OP-XY profile (base 1): strip n of page p = track / MIDI channel track_base[p] + n
- *   fader       volume, CC 7 (takeover per setting; the LED above it is lit while it has not
- *               picked its value up)
- *   Mute        toggles mute, CC 9 = 127 / 0
- *   Solo        toggles solo: the other tracks are muted (CC 9) while any is soloed
- *   Rec         focus group A: knobs 1-4 send CC 12-15 of this track (again: off)
- *   Select      focus group B: knobs 5-8 send CC 12-15 of this track (again: off)
- *   knob k      CC 12 on channel track_base + k (absolute: the mixer keeps the value)
+ * Two modes, as the stock firmware; Shift + Left = DAW, Shift + Right = CC (the lit arrow shows
+ * the mode while Shift is held; the mode is stored). Each mode has its own mappings.
+ *
+ * CC mode: the profile in the configuration (mixer_config.h, cc_*; the editor's templates, e.g.
+ * "OP-XY - blen2r"). Strip n of page p = track / MIDI channel track_base[p] + n:
+ *   fader       CC cc_fader (takeover per setting; the LED above it is lit while it has not
+ *               picked its value up); Shift + fader: CC cc_fader_shift while Shift is held
+ *   Mute        toggles mute, CC cc_mute = 127 / 0
+ *   Solo        (MCC_SOLO_MUTES) toggles solo: the other tracks are muted while any is soloed
+ *   Rec         focus group A: knobs 1-4 send CC cc_focus..+3 of this track (again: off)
+ *   Select      focus group B: knobs 5-8 send CC cc_focus..+3 of this track (again: off)
+ *   knob k      CC cc_knob on channel track_base + k (absolute: the mixer keeps the value)
  *   Play / Pause / Record / Rewind / FF / << / >> / arrows: the stock DAW notes
- *   Shift + Mute / Solo / Rec / Select   fader special mode: mod wheel / pitch bend / channel
- *               pressure / pan (CC 10), toggles; the button's LED blinks while it is on; the
- *               button alone also ends it
- *   Shift + fader (no mode, no mapping)  pan (CC 10), while Shift is held
- * DAW profile (base 0): the stock DAW mode (Mackie Control): knobs CC 16-23 relative, faders
- *   pitch bend 1-8 with touch notes 104-111, buttons notes; LEDs follow the host.
+ *   Shift + Mute / Solo / Rec / Select   (MCC_SPECIAL) fader special mode: mod wheel / pitch
+ *               bend / channel pressure / pan (CC 10), toggles; the button's LED blinks while it
+ *               is on; the button alone also ends it
+ * DAW mode: the stock DAW mode (Mackie Control): knobs CC 16-23 relative, faders pitch bend 1-8
+ *   with touch notes 104-111, buttons notes; LEDs follow the host.
  * Always:
  *   Shift + Rewind / Fast-forward        page down / up; the LED above fader <page> blinks fast
  *   Shift + Bluetooth + Play, held 2 s   the bootloader (DFU), for updates
@@ -53,9 +56,9 @@ static u32 stamp(void)
 enum { FM_VOLUME, FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
 
 static u8 page;                                     /* 0-based */
-static u8 mute[16], solo[16], sent_mute[16];        /* OP-XY: per track */
-static s8 focus_a = -1, focus_b = -1;               /* OP-XY: track, -1 = none */
-static u8 fader_mode[16];                           /* OP-XY: per track, FM_* */
+static u8 mute[16], solo[16], sent_mute[16];        /* CC mode: per track */
+static s8 focus_a = -1, focus_b = -1;               /* CC mode: track, -1 = none */
+static u8 fader_mode[16];                           /* CC mode: per track, FM_* */
 static u8 playing;
 static u32 page_shown_at;
 static u32 boot_combo_since;
@@ -243,15 +246,18 @@ static void update_mutes(void)
 {
     int any_solo = 0;
 
+    if (mcfg->cc_mute & MCFG_NONE) {
+        return;
+    }
     for (int t = 0; t < 16; t++) {
-        any_solo |= solo[t];
+        any_solo |= solo[t] && (mcfg->cc_flags & MCC_SOLO_MUTES);
     }
     for (int t = 0; t < 16; t++) {
         u8 m = mute[t] || (any_solo && !solo[t]);
 
         if (m != sent_mute[t]) {
             sent_mute[t] = m;
-            send_cc(t, 9, m ? 127 : 0);
+            send_cc(t, mcfg->cc_mute, m ? 127 : 0);
         }
     }
 }
@@ -270,7 +276,7 @@ static u32 daw_touch_at[NUM_STRIPS];
 static target_t fader_resolve(int f)
 {
     const mcfg_entry_t *e = mcfg_resolve(MCTL_FADER(f), page + 1, SHIFT_HELD());
-    target_t n = { TK_CC, (u8)track_of(f), 7, 0, 127, mcfg->fader_takeover, 0 };
+    target_t n = { TK_CC, (u8)track_of(f), mcfg->cc_fader, 0, 127, mcfg->fader_takeover, 0 };
 
     if (e) {
         u8 tk = e->flags & MF_TAKEOVER_MASK;
@@ -279,21 +285,25 @@ static target_t fader_resolve(int f)
         n.pickup = tk == MF_TAKEOVER_JUMP ? 0 : tk == MF_TAKEOVER_PICKUP ? 1 : mcfg->fader_takeover;
         return n;
     }
-    if (mcfg->base == BASE_DAW) {
+    if (mcfg->mode == MODE_DAW) {
         n.kind = TK_DAW_FADER;
         n.ch = (u8)f;
         n.num = 0;
         n.pickup = 0;                       /* a DAW moves to the fader; the LED shows the host */
         return n;
     }
-    switch (fader_mode[n.ch]) {
+    if (n.num & MCFG_NONE) {
+        n.kind = TK_NONE;
+        return n;
+    }
+    switch (mcfg->cc_flags & MCC_SPECIAL ? fader_mode[n.ch] : FM_VOLUME) {
     case FM_MODWHEEL: n.num = 1; break;
     case FM_PITCHBEND: n.kind = TK_PITCHBEND; break;
     case FM_PRESSURE: n.kind = TK_PRESSURE; break;
     case FM_PAN: n.num = 10; break;
     default:
-        if (SHIFT_HELD()) {
-            n.num = 10;                     /* Shift + fader: pan while Shift is held */
+        if (SHIFT_HELD() && !(mcfg->cc_fader_shift & MCFG_NONE)) {
+            n.num = mcfg->cc_fader_shift;   /* Shift + fader (pan for the OP-XY) while held */
         }
         break;
     }
@@ -417,7 +427,7 @@ static u8 knob_prog[16];
 static target_t knob_resolve(int k)
 {
     const mcfg_entry_t *e = mcfg_resolve(MCTL_KNOB(k), page + 1, SHIFT_HELD());
-    target_t n = { TK_CC, 0, 12, 0, 127, 0, mcfg->accel };
+    target_t n = { TK_CC, 0, mcfg->cc_knob, 0, 127, 0, mcfg->accel };
 
     if (e) {
         u8 a = e->flags & MF_ACCEL_MASK;
@@ -426,18 +436,21 @@ static target_t knob_resolve(int k)
         n.accel = a == MF_ACCEL_OFF ? 0 : a == MF_ACCEL_ON ? 1 : mcfg->accel;
         return n;
     }
-    if (mcfg->base == BASE_DAW) {
+    if (mcfg->mode == MODE_DAW) {
         n.kind = TK_DAW_KNOB;
         n.num = 16 + k;
         n.accel = 0;
         return n;
     }
-    if (k < 4 && focus_a >= 0) {
-        n.ch = (u8)focus_a, n.num = 12 + k;
-    } else if (k >= 4 && focus_b >= 0) {
-        n.ch = (u8)focus_b, n.num = 12 + (k - 4);
+    if (k < 4 && focus_a >= 0 && !(mcfg->cc_focus & MCFG_NONE)) {
+        n.ch = (u8)focus_a, n.num = (mcfg->cc_focus + k) & 127;
+    } else if (k >= 4 && focus_b >= 0 && !(mcfg->cc_focus & MCFG_NONE)) {
+        n.ch = (u8)focus_b, n.num = (mcfg->cc_focus + k - 4) & 127;
     } else {
-        n.ch = (u8)track_of(k);             /* default: CC 12 of the strip's track */
+        n.ch = (u8)track_of(k);             /* default: CC cc_knob of the strip's track */
+    }
+    if (n.num & MCFG_NONE) {
+        n.kind = TK_NONE;
     }
     return n;
 }
@@ -563,7 +576,7 @@ static void mapped_button(int b, const mcfg_entry_t *e, int down)
     }
 }
 
-static void opxy_strip_button(int strip, int row, int down)
+static void cc_strip_button(int strip, int row, int down)
 {
     static const u8 mode_of_row[4] = { FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
     int t = track_of(strip);
@@ -574,16 +587,29 @@ static void opxy_strip_button(int strip, int row, int down)
     }
     /* Shift + the button: the fader's special mode on / off; the button alone while its mode is
      * on (its LED blinking) also just ends the mode */
-    if (SHIFT_HELD() || fader_mode[t] == m) {
+    if ((mcfg->cc_flags & MCC_SPECIAL) && (SHIFT_HELD() || fader_mode[t] == m)) {
         fader_mode[t] = fader_mode[t] == m ? FM_VOLUME : m;
         fader_retarget(strip);
         return;
     }
     switch (row) {
     case SMCMIXER_ROW_MUTE: mute[t] ^= 1; update_mutes(); break;
-    case SMCMIXER_ROW_SOLO: solo[t] ^= 1; update_mutes(); break;
-    case SMCMIXER_ROW_REC: focus_a = focus_a == t ? -1 : t; break;
-    case SMCMIXER_ROW_SELECT: focus_b = focus_b == t ? -1 : t; break;
+    case SMCMIXER_ROW_SOLO:
+        if (mcfg->cc_flags & MCC_SOLO_MUTES) {
+            solo[t] ^= 1;
+            update_mutes();
+        }
+        break;
+    case SMCMIXER_ROW_REC:
+        if (!(mcfg->cc_focus & MCFG_NONE)) {
+            focus_a = focus_a == t ? -1 : t;
+        }
+        break;
+    case SMCMIXER_ROW_SELECT:
+        if (!(mcfg->cc_focus & MCFG_NONE)) {
+            focus_b = focus_b == t ? -1 : t;
+        }
+        break;
     }
 }
 
@@ -607,6 +633,14 @@ static void button(int b, int down)
         faders_retarget_all();              /* the Shift layer, Shift + fader */
         return;
     }
+    if (shift && (b == SMCMIXER_BTN_LEFT || b == SMCMIXER_BTN_RIGHT)) {  /* reserved: the mode */
+        if (down) {
+            mcfg_set_mode(b == SMCMIXER_BTN_LEFT ? MODE_DAW : MODE_CC);
+            mixer_config_changed();
+        }
+        btn_press_entry[b] = NULL;
+        return;
+    }
     if (shift && (b == SMCMIXER_BTN_REWIND || b == SMCMIXER_BTN_FF)) {    /* reserved: pages */
         if (down) {
             set_page(page + (b == SMCMIXER_BTN_FF ? 1 : -1));
@@ -623,8 +657,8 @@ static void button(int b, int down)
         mapped_button(b, e, down);
         return;
     }
-    if (mcfg->base == BASE_OPXY && b < 32) {
-        opxy_strip_button(b / 4, b % 4, down);
+    if (mcfg->mode == MODE_CC && b < 32) {
+        cc_strip_button(b / 4, b % 4, down);
         return;
     }
     if (b == SMCMIXER_BTN_PLAY && down) {
@@ -651,19 +685,21 @@ static void leds_update(void)
 
         if (b == SMCMIXER_BTN_SHIFT) {
             on = shift;
+        } else if (shift && (b == SMCMIXER_BTN_LEFT || b == SMCMIXER_BTN_RIGHT)) {
+            on = (b == SMCMIXER_BTN_RIGHT) == (mcfg->mode == MODE_CC);     /* the mode */
         } else if (b == SMCMIXER_BTN_BLUETOOTH) {
             on = mixer_blemidi_connected() ? 1 : blink && (now / 1000) % 3 == 0;
         } else if ((e = mcfg_resolve(MCTL_BUTTON(b), page + 1, shift)) != NULL) {
             on = (e->flags & MF_BUTTON_MASK) == MF_TOGGLE ? btn_toggle[b] : smcmixer_button(b);
-        } else if (mcfg->base == BASE_OPXY && b < 32) {
+        } else if (mcfg->mode == MODE_CC && b < 32) {
             int s = b / 4, row = b % 4, t = track_of(s);
 
-            if (fader_mode[t] == mode_of_row[row]) {
+            if ((mcfg->cc_flags & MCC_SPECIAL) && fader_mode[t] == mode_of_row[row]) {
                 on = blink;
             } else {
                 on = row == 0 ? sent_mute[t] : row == 1 ? solo[t] : row == 2 ? focus_a == t : focus_b == t;
             }
-        } else if (mcfg->base == BASE_OPXY && b == SMCMIXER_BTN_PLAY) {
+        } else if (mcfg->mode == MODE_CC && b == SMCMIXER_BTN_PLAY) {
             on = playing;
         } else {
             on = daw_led[b];
@@ -700,7 +736,7 @@ static void midi_in(u8 status, u8 d1, u8 d2)
     u8 val = type == 0xD0 ? d1 & 127 : d2 & 127;
 
     /* DAW: the host sets the button LEDs with notes */
-    if (mcfg->base == BASE_DAW && (type == 0x90 || type == 0x80) && ch == 0) {
+    if (mcfg->mode == MODE_DAW && (type == 0x90 || type == 0x80) && ch == 0) {
         for (int b = 0; b < SMCMIXER_NUM_BUTTONS; b++) {
             if (daw_note_of_button[b] == (d1 & 127)) {
                 daw_led[b] = type == 0x90 && d2;
@@ -711,7 +747,7 @@ static void midi_in(u8 status, u8 d1, u8 d2)
     if (type != 0xB0 && type != 0xE0 && type != 0xD0) {
         return;
     }
-    if (!mcfg->follow_incoming && !(mcfg->base == BASE_DAW && type == 0xE0)) {
+    if (!mcfg->follow_incoming && !(mcfg->mode == MODE_DAW && type == 0xE0)) {
         return;
     }
     dbg.n_in++;

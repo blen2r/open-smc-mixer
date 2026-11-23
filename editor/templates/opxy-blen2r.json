@@ -1,0 +1,20 @@
+{
+ "format": 1,
+ "name": "OP-XY - blen2r",
+ "device": "Teenage Engineering OP-XY",
+ "author": "blen2r",
+ "description": "Mixer for the 16 tracks over Bluetooth: volume, mute, solo, pan, track parameters on the knobs",
+ "settings": {
+  "pages": 2,
+  "track_base": [0, 8, 0, 8, 0, 8, 0, 8],
+  "follow_incoming": true,
+  "cc_fader": 7,
+  "cc_fader_shift": 10,
+  "cc_mute": 9,
+  "cc_knob": 12,
+  "cc_focus": 12,
+  "solo_mutes": true,
+  "special_modes": true
+ },
+ "mappings": []
+}

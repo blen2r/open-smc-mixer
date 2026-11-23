@@ -1,0 +1,10 @@
+[
+ {
+  "file": "opxy-blen2r.json",
+  "name": "OP-XY - blen2r",
+  "device": "Teenage Engineering OP-XY",
+  "author": "blen2r",
+  "description": "Mixer for the 16 tracks over Bluetooth: volume, mute, solo, pan, track parameters on the knobs",
+  "doc": "opxy-blen2r.md"
+ }
+]

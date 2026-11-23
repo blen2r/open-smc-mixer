@@ -9,7 +9,7 @@
  * bit 7 of byte i) followed by the 7 bytes' low 7 bits.
  *
  *   01 hello        -> fw version u16, config version u16, max bytes u16, controls u8, pages u8,
- *                      current page u8, current length u16
+ *                      current page u8, current length u16, current mode u8
  *   02 read         offset u16, length u8 (<= 128)  -> those bytes of the active configuration
  *   03 write        offset u16, bytes               -> into the staging copy
  *   04 commit       length u16                      -> checked (magic, version, size, CRC),
@@ -26,8 +26,14 @@
 #include "smcpad_rt.h"
 #include "mixer_config.h"
 
-#define FW_VERSION          0x0001
-#define STORE_KEY_CONFIG    1
+#define FW_VERSION          0x0002
+#define STORE_KEY_CONFIG_V1 1               /* version 1, 2432 bytes: read once, converted */
+#define STORE_KEY_CONFIG    2
+#define V1_HEADER           32
+#define V1_MAX_BYTES        (V1_HEADER + MCFG_MAX_ENTRIES * MCFG_ENTRY)
+
+_Static_assert(sizeof(mcfg_header_t) == MCFG_HEADER, "mcfg_header_t must match the 64-byte header");
+_Static_assert(sizeof(mcfg_entry_t) == MCFG_ENTRY, "mcfg_entry_t must be 10 bytes");
 
 static u8 active[MCFG_MAX_BYTES] __attribute__((aligned(4)));
 static u8 staging[MCFG_MAX_BYTES] __attribute__((aligned(4)));
@@ -57,13 +63,19 @@ static u32 blob_len(const u8 *b)
     return MCFG_HEADER + (u32)h->n_entries * MCFG_ENTRY;
 }
 
-static u32 blob_crc(const u8 *b)
+/* CRC over a header of `hl` bytes whose CRC field (at hl - 4) counts as 0, then n entries */
+static u32 crc_of(const u8 *b, u32 hl, u32 n)
 {
     u8 head[MCFG_HEADER];
 
-    memcpy(head, b, MCFG_HEADER);
-    memset(head + 28, 0, 4);
-    return crc32_update(crc32_update(0, head, MCFG_HEADER), b + MCFG_HEADER, blob_len(b) - MCFG_HEADER);
+    memcpy(head, b, hl);
+    memset(head + hl - 4, 0, 4);
+    return crc32_update(crc32_update(0, head, hl), b + hl, n * MCFG_ENTRY);
+}
+
+static u32 blob_crc(const u8 *b)
+{
+    return crc_of(b, MCFG_HEADER, ((const mcfg_header_t *)b)->n_entries);
 }
 
 static int blob_ok(const u8 *b, u32 len)
@@ -71,18 +83,37 @@ static int blob_ok(const u8 *b, u32 len)
     const mcfg_header_t *h = (const mcfg_header_t *)b;
 
     if (h->magic != MCFG_MAGIC || h->version != MCFG_VERSION || h->n_entries > MCFG_MAX_ENTRIES ||
-        blob_len(b) != len || h->pages < 1 || h->pages > MCFG_PAGES || h->crc32 != blob_crc(b)) {
+        blob_len(b) != len || h->pages < 1 || h->pages > MCFG_PAGES || h->mode > MODE_CC ||
+        h->crc32 != blob_crc(b)) {
         return 0;
     }
     for (u32 i = 0; i < h->n_entries; i++) {
         const mcfg_entry_t *e = (const mcfg_entry_t *)(b + MCFG_HEADER + i * MCFG_ENTRY);
 
-        if (e->control >= MCTL_COUNT || (e->layer & 0xF) > MCFG_PAGES || (e->layer & ~0x1F) ||
+        if (e->control >= MCTL_COUNT || (e->layer & 0xF) > MCFG_PAGES || (e->layer & ~0x3F) ||
             e->type >= MT_COUNT || e->channel > 15) {
             return 0;
         }
     }
     return 1;
+}
+
+/* CC mode's profile, as editor/templates/opxy-blen2r.json */
+static void profile_defaults(mcfg_header_t *h)
+{
+    static const char name[] = "OP-XY - blen2r";
+
+    for (int p = 0; p < MCFG_PAGES; p++) {
+        h->track_base[p] = (p & 1) ? 8 : 0;         /* tracks 1-8, 9-16, 1-8, ... */
+    }
+    h->cc_fader = 7;                                /* volume */
+    h->cc_fader_shift = 10;                         /* pan */
+    h->cc_mute = 9;
+    h->cc_knob = 12;
+    h->cc_focus = 12;                               /* the OP-XY's track parameters, CC 12-15 */
+    h->cc_flags = MCC_SOLO_MUTES | MCC_SPECIAL;
+    memset(h->name, 0, sizeof(h->name));
+    memcpy(h->name, name, sizeof(name) - 1);
 }
 
 static void defaults(u8 *b)
@@ -93,7 +124,7 @@ static void defaults(u8 *b)
     h->magic = MCFG_MAGIC;
     h->version = MCFG_VERSION;
     h->n_entries = 0;
-    h->base = BASE_OPXY;
+    h->mode = MODE_DAW;                             /* as the stock firmware */
     h->fader_takeover = 1;
     h->fader_led = 1;
     h->follow_incoming = 1;
@@ -102,10 +133,13 @@ static void defaults(u8 *b)
     h->accel_ms_x3 = 6;
     h->accel_ms_x2 = 12;
     h->pages = 2;
-    for (int p = 0; p < MCFG_PAGES; p++) {
-        h->track_base[p] = (p & 1) ? 8 : 0;         /* OP-XY: tracks 1-8, 9-16, 1-8, ... */
-    }
+    profile_defaults(h);
     h->crc32 = blob_crc(b);
+}
+
+static u32 layer_index(int page, int shift, int daw)
+{
+    return (u32)(daw * (MCFG_PAGES + 1) * 2 + page * 2 + shift);
 }
 
 static void build_index(void)
@@ -113,7 +147,7 @@ static void build_index(void)
     memset(index_map, 0, sizeof(index_map));
     for (u32 i = 0; i < mcfg->n_entries; i++) {
         const mcfg_entry_t *e = (const mcfg_entry_t *)(active + MCFG_HEADER + i * MCFG_ENTRY);
-        u32 layer = (e->layer & 0xF) * 2 + ((e->layer >> 4) & 1);
+        u32 layer = layer_index(e->layer & 0xF, (e->layer >> 4) & 1, (e->layer >> 5) & 1);
 
         index_map[e->control][layer] = (u8)(i + 1);     /* a later duplicate wins */
     }
@@ -137,7 +171,7 @@ const mcfg_entry_t *mcfg_resolve(int control, int page, int shift)
         if (order_shift[k][0] && (page < 1 || page > MCFG_PAGES)) {
             continue;
         }
-        i = index_map[control][pg * 2 + sh];
+        i = index_map[control][layer_index(pg, sh, mcfg->mode == MODE_DAW)];
         if (i) {
             const mcfg_entry_t *e = (const mcfg_entry_t *)(active + MCFG_HEADER + (i - 1) * MCFG_ENTRY);
 
@@ -147,19 +181,64 @@ const mcfg_entry_t *mcfg_resolve(int control, int page, int shift)
     return NULL;
 }
 
+static int store_active(void)
+{
+    return smcpad_store_write(STORE_KEY_CONFIG, active, MCFG_MAX_BYTES) == MCFG_MAX_BYTES;
+}
+
+/* A version 1 configuration (in staging, as read from the old key) into version 2 (in active).
+ * base OP-XY -> CC mode with the OP-XY profile; base DAW -> DAW mode, the mappings DAW ones. */
+static int convert_v1(const u8 *v1, u8 *out)
+{
+    const u32 magic = v1[0] | v1[1] << 8 | v1[2] << 16 | (u32)v1[3] << 24;
+    u16 version = v1[4] | v1[5] << 8, n = v1[6] | v1[7] << 8;
+    u32 crc = v1[28] | v1[29] << 8 | v1[30] << 16 | (u32)v1[31] << 24;
+    mcfg_header_t *h = (mcfg_header_t *)out;
+
+    if (magic != MCFG_MAGIC || version != 1 || n > MCFG_MAX_ENTRIES || crc != crc_of(v1, V1_HEADER, n)) {
+        return 0;
+    }
+    defaults(out);
+    h->mode = v1[8] ? MODE_CC : MODE_DAW;
+    memcpy(&h->fader_takeover, v1 + 9, 16);         /* takeover .. track_base[8]: same places */
+    h->n_entries = n;
+    memcpy(out + MCFG_HEADER, v1 + V1_HEADER, n * MCFG_ENTRY);
+    if (h->mode == MODE_DAW) {
+        for (u32 i = 0; i < n; i++) {
+            out[MCFG_HEADER + i * MCFG_ENTRY + 1] |= MCFG_LAYER_DAW;
+        }
+    }
+    h->crc32 = blob_crc(out);
+    return blob_ok(out, blob_len(out));
+}
+
 void mcfg_begin(void)
 {
     if (smcpad_store_read(STORE_KEY_CONFIG, active, MCFG_MAX_BYTES) != MCFG_MAX_BYTES ||
         !blob_ok(active, blob_len(active) <= MCFG_MAX_BYTES ? blob_len(active) : 0)) {
-        defaults(active);
+        memset(staging, 0, sizeof(staging));
+        if (smcpad_store_read(STORE_KEY_CONFIG_V1, staging, V1_MAX_BYTES) == V1_MAX_BYTES &&
+            convert_v1(staging, active)) {
+            store_active();
+        } else {
+            defaults(active);
+        }
     }
     memcpy(staging, active, MCFG_MAX_BYTES);
     build_index();
 }
 
-static int store_active(void)
+void mcfg_set_mode(int mode)
 {
-    return smcpad_store_write(STORE_KEY_CONFIG, active, MCFG_MAX_BYTES) == MCFG_MAX_BYTES;
+    mcfg_header_t *h = (mcfg_header_t *)active;
+
+    if (mode == h->mode || (mode != MODE_DAW && mode != MODE_CC)) {
+        return;
+    }
+    h->mode = (u8)mode;
+    h->crc32 = blob_crc(active);
+    memcpy(staging, active, MCFG_HEADER);
+    store_active();
 }
 
 /* ------------------------------------------------------------------ protocol */
@@ -250,7 +329,8 @@ int mcfg_sysex(const u8 *msg, u32 len)
         r[4] = MCFG_MAX_BYTES & 0xFF; r[5] = MCFG_MAX_BYTES >> 8;
         r[6] = MCTL_COUNT; r[7] = MCFG_PAGES; r[8] = (u8)mixer_current_page();
         r[9] = l & 0xFF; r[10] = l >> 8;
-        reply(seq, 0, r, 11);
+        r[11] = mcfg->mode;
+        reply(seq, 0, r, 12);
         return 1;
     }
     case 0x02: {

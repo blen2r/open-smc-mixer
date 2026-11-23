@@ -71,6 +71,15 @@
   .tb { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .tb label { font-size: 12px; color: var(--muted); }
   .tb input { width: 100%; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; width: min(640px, calc(100vw - 32px)); padding: 16px; }
+  dialog::backdrop { background: rgba(0,0,0,.55); }
+  #pkList { max-height: 60vh; overflow: auto; margin-top: 8px; }
+  .tpl { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid var(--line); }
+  .tplText { flex: 1; min-width: 0; }
+  .tpl a { color: var(--accent2); font-size: 12px; }
+  .star { border: none; background: none; font-size: 18px; color: var(--muted); padding: 0 4px; }
+  .star.on { color: var(--accent); }
+  .row input[type=number] { width: 70px; }
 </style>
 </head>
 <body>
@@ -90,7 +99,9 @@
 <main>
   <section>
     <div class="bar">
-      <span class="label">Page</span>
+      <span class="label">Mode</span>
+      <span class="seg" id="modes"><button data-mode="daw">DAW</button><button data-mode="cc">CC</button></span>
+      <span class="label" style="margin-left:12px">Page</span>
       <span class="seg" id="pages"></span>
       <span class="label" style="margin-left:12px">Layer</span>
       <span class="seg" id="layers"><button data-shift="0" class="on">Normal</button><button data-shift="1" class="shift">Shift held</button></span>
@@ -101,7 +112,8 @@
     </div>
     <p class="hint">Click a control to edit it on the selected page and layer. <span style="color:var(--accent)">Orange</span>: mapped right here.
       <span style="color:var(--accent2)">Blue</span>: inherited from a broader layer (all pages, or the normal layer).
-      Grey: what the base profile does. Resolution: page + Shift → page → all pages + Shift → all pages → base profile.</p>
+      Grey: what the mode does by itself (DAW: the stock Mackie layout; CC: the profile in Settings).
+      Each mode has its own mappings. Resolution: page + Shift → page → all pages + Shift → all pages → the mode.</p>
   </section>
   <aside>
     <div class="panel" id="editPanel"><h2>Control</h2><p class="hint">Select a control on the mixer drawing.</p></div>
@@ -113,6 +125,14 @@
     </div>
   </aside>
 </main>
+<dialog id="picker">
+  <div class="row"><h2 style="margin:0">Templates</h2><span class="spacer"></span><button id="pkClose">Close</button></div>
+  <p class="hint">A template sets CC mode's profile and mappings for a device. DAW mode and your fader / knob
+    preferences stay. Templates live in editor/templates/ (shared) and editor/templates/local/ (yours).</p>
+  <div class="row"><input type="search" id="pkSearch" placeholder="Search name, device, author" style="flex:1">
+    <label><input type="checkbox" id="pkStars"> ★ only</label></div>
+  <div id="pkList"></div>
+</dialog>
 <div class="toast" id="toast"></div>
 <script src="config.js"></script>
 <script src="device.js"></script>
