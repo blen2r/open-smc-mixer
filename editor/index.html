@@ -75,6 +75,9 @@
   .fg label { font-size: 11px; color: var(--muted); text-align: center; display: flex; flex-direction: column; min-width: 0; }
   .fg input { width: 100%; min-width: 0; padding-left: 2px; padding-right: 2px; text-align: center; }
   .flabel { color: var(--muted); margin: 6px 0 2px; }
+  .combo { display: inline-flex; gap: 6px; flex: 1; min-width: 0; }
+  .combo select { flex: 1; min-width: 0; }
+  .combo input[type=number] { width: 64px; flex: none; }
   .tip { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 5px; border-radius: 50%; border: 1px solid var(--dim); color: var(--muted); font-size: 10px; font-weight: 600; cursor: help; position: relative; vertical-align: middle; text-transform: none; letter-spacing: 0; }
   .tip:hover, .tip:focus { border-color: var(--accent2); color: var(--accent2); outline: none; }
   .tip::after { content: attr(data-tip); position: absolute; left: -8px; top: calc(100% + 6px); width: max-content; max-width: 280px; background: #0d0f12; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: 12px/1.4 system-ui, sans-serif; font-weight: 400; white-space: normal; z-index: 20; box-shadow: 0 4px 14px rgba(0,0,0,.5); pointer-events: none; display: none; }

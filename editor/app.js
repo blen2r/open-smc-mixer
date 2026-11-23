@@ -253,8 +253,8 @@ function renderGlobals() {
     c1 += `<h3>Shift + button: the fader sends${tipIcon('Shift + a strip button switches that strip\'s fader to what is set here (the button blinks); the button again switches it back. Nothing: Shift + the button does what the button does.')}</h3>`;
     ['Mute', 'Solo', 'Rec', 'Track Stop'].forEach((b, k) => {
       const v = g.fader_special[k], kind = v === null ? 'off' : typeof v === 'number' ? 'cc' : v;
-      c1 += field(`Shift + ${b}`, `<select class="gSpK" data-k="${k}">${opt('off', kind, 'nothing')}${opt('cc', kind, 'CC')}${opt('pitchbend', kind, 'pitch bend')}${opt('pressure', kind, 'channel pressure')}</select>` +
-        (kind === 'cc' ? `<input type="number" class="gSpC" data-k="${k}" min="0" max="127" value="${v}">` : ''));
+      c1 += field(`Shift + ${b}`, `<span class="combo"><select class="gSpK" data-k="${k}">${opt('off', kind, 'nothing')}${opt('cc', kind, 'CC')}${opt('pitchbend', kind, 'pitch bend')}${opt('pressure', kind, 'channel pressure')}</select>` +
+        (kind === 'cc' ? `<input type="number" class="gSpC" data-k="${k}" min="0" max="127" value="${v}" title="CC number">` : '') + '</span>');
     });
     const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
       `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
