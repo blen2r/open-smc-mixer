@@ -344,6 +344,38 @@ static void leds_update(void)
     smcmixer_led_set(SMCMIXER_BTN_BLUETOOTH, mixer_blemidi_connected() ? 1 : blink && (now / 1000) % 3 == 0);
 }
 
+/* ------------------------------------------------------------------ MIDI in
+ * A CC from the other side (the OP-XY echoing a change made on it, a DAW's feedback) becomes
+ * the known value of that control: a fader on it has to pick it up again, and its LED shows
+ * the mismatch. Pitch bend and pressure likewise. */
+static void midi_in(u8 status, u8 d1, u8 d2)
+{
+    u8 type = status & 0xF0, ch = status & 0x0F;
+
+    if (type == 0xB0) {
+        cc_val[ch][d1 & 127] = d2 & 127;
+        if (d1 >= 12 && d1 <= 15) {
+            knob_val[ch][d1 - 12] = d2 & 127;
+        }
+    } else if (type == 0xE0) {
+        pb_val[ch] = d2 & 127;
+    } else if (type == 0xD0) {
+        at_val[ch] = d1 & 127;
+    } else {
+        return;
+    }
+    for (int f = 0; f < NUM_STRIPS; f++) {
+        target_t *t = &fader_target[f];
+        u8 v = target_value(t);
+
+        if (t->ch == ch && v != UNKNOWN && ((type == 0xB0 && t->kind == 0 && t->num == (d1 & 127)) ||
+                                            (type == 0xE0 && t->kind == 1) || (type == 0xD0 && t->kind == 2))) {
+            picked[f] = v == fader_pos7[f];
+            fader_side[f] = fader_pos7[f] > v ? 1 : -1;
+        }
+    }
+}
+
 /* ------------------------------------------------------------------ SysEx from USB-MIDI */
 
 static u8 sysex[32];
@@ -365,6 +397,10 @@ static void usbmidi_in(const u8 pkt[4])
     u8 cin = pkt[0] & 0x0F;
     u32 n = cin == 4 || cin == 7 ? 3 : cin == 6 ? 2 : cin == 5 ? 1 : 0;
 
+    if (cin >= 0x8 && cin <= 0xE) {         /* channel voice messages */
+        midi_in(pkt[1], pkt[2], pkt[3]);
+        return;
+    }
     if (!n) {
         return;
     }
@@ -414,7 +450,8 @@ void mixer_app_run(void)
             }
         }
         while (mixer_blemidi_read(msg)) {
-        }                                   /* nothing to do with input yet */
+            midi_in(msg[0], msg[1], msg[2]);
+        }
         while (smcpad_usbmidi_read(pkt)) {
             usbmidi_in(pkt);
         }
