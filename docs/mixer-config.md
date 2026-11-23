@@ -85,8 +85,9 @@ Mode kept across power cycles; the change is shown with an LED pattern (TBD).
 - 8 pages, current page kept across power cycles.
 - Shift + Right: page + 1, Shift + Left: page - 1 (no wrap-around -- TBD).
   (Stock firmware uses this combination for DAW/CC mode; ours uses Shift + Up / Down for that.)
-- On a page change the LED above fader `p` blinks for ~1 s (TBD: which LED, rate), then the LEDs go
-  back to what they showed (DAW feedback or the button LEDs of the new page).
+- On a page change the fader LED `Lp` lights **steadily** for ~1 s with the other fader LEDs off,
+  then the LEDs go back to what they showed (mismatch blinking, button LEDs of the new page).
+  Steady rather than blinking, because blinking already means "fader mismatch".
 - The firmware remembers, per page, the last value it sent for each absolute control, so coming back
   to a page continues from there.
 
