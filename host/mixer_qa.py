@@ -491,7 +491,7 @@ def main():
             input("Press Enter once you saved in the editor ")
             diffs = compare(decode(m.read()), want)
             if not diffs:
-                print(f"{GREEN}PASS{OFF} editor: the mixer holds exactly the QA configuration with your four changes")
+                print(f"{GREEN}PASS{OFF} editor: the mixer holds exactly the QA configuration with your changes")
                 break
             print(f"{RED}FAIL{OFF} editor: the configuration on the mixer differs:")
             for d in diffs:
@@ -508,11 +508,20 @@ def main():
     results = []
     try:
         cs = checks(qa)
-        print(f"\n{BOLD}Hardware checks{OFF}: Enter ends a check early, s + Enter skips it.")
+        print(f"\n{BOLD}Hardware checks{OFF}: Enter ends a check early, s + Enter skips it; a failed check can be retried.")
         for n, c in enumerate(cs, 1):
             if n < args.start:
                 continue
-            results.append((n, c["say"], qa.run_check(n, len(cs), c)))
+            while True:
+                r = qa.run_check(n, len(cs), c)
+                if not r:
+                    break
+                # a slip of the hand should not cost the whole run
+                a = input(f"   {YEL}[r]etry this check, or Enter to go on?{OFF} ").strip().lower()
+                if not a.startswith("r"):
+                    break
+                print(f"   {DIM}(if the failed try left something on, e.g. a toggle or a focus, put it back first){OFF}")
+            results.append((n, c["say"], r))
     except KeyboardInterrupt:
         print("\ninterrupted")
     finally:

@@ -54,7 +54,8 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
      the mode stored in the configuration;
    - no stray messages anywhere (a noisy fader fails every check it is noisy in).
 
-`--no-editor` loads the expected configuration directly; `--from N` resumes at check N.
+A failed check offers a retry (for a slip of the hand); the editor round trip too. `--no-editor`
+loads the expected configuration directly; `--from N` resumes at check N.
 
 ## 3. Manual checks
 
