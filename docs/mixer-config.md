@@ -42,7 +42,7 @@ Mackie Control layout. The stock firmware sends everything identically on **both
 | T*n*.1 (top row) | Note 16+*n*-1 (MCU Mute 1..8) |
 | T*n*.2 | Note 8+*n*-1 (MCU Solo) |
 | T*n*.3 | Note 0+*n*-1 (MCU Rec arm) |
-| T*n*.4 (bottom row) | Note 24+*n*-1 (MCU Select) |
+| T*n*.4 (bottom row) | Note 24+*n*-1 (MCU Select; the button is Track stop) |
 | Play / Pause / Record | Note 94 / 93 / 95 (MCU Play / Stop / Record) |
 | Rewind / Fast-forward | Note 91 / 92 |
 | `<<` / `>>` | Note 46 / 47 (MCU Fader bank left / right) |
@@ -132,13 +132,13 @@ Settings → CC mode profile). Strip *n* of page *p* = track / MIDI channel `tra
 | `solo_mutes` | Solo | toggles solo by muting (`cc_mute`) the other tracks while any is soloed |
 | `cc_encoder` | encoder | this CC on the strip's channel (absolute, the mixer keeps the value; none: nothing) |
 | `focus_rec` | Rec | focus group: 8 slots, one per encoder, each a CC or none. Rec on a strip makes every encoder with a CC send it on that strip's track; the others stay as they are; again: off. All none: Rec sends nothing |
-| `focus_select` | Select | the same, a second group |
-| `special_modes` | Shift + Mute / Solo / Rec / Select | the fader's special modes (below) |
+| `focus_stop` | Track stop | the same, a second group |
+| `special_modes` | Shift + Mute / Solo / Rec / Track stop | the fader's special modes (below) |
 | | transport, arrows | the stock DAW notes |
 
 **Focus groups.** One strip per group at a time (Rec on another strip moves it); the button's LED
 is lit while its group is on that strip. Both groups can be on together when they use different
-encoders (the OP-XY template: Rec = encoders 1-4, Select = 5-8). When they share an encoder only
+encoders (the OP-XY template: Rec = encoders 1-4, Track stop = 5-8). When they share an encoder only
 one can be on: turning one on blinks both buttons fast for half a second, then the other goes off.
 Encoders with their own mapping are not affected by focus.
 
@@ -163,7 +163,7 @@ for a track's 4 parameters (the table itself lists "track parameters" as CC 46 -
 
 Strip *n* = OP-XY track / channel *n*; page 2 covers tracks 9-16. As a profile: `cc_fader` 7,
 `cc_fader_shift` 10, `cc_mute` 9, `solo_mutes`, `cc_encoder` 12, `special_modes`, `focus_rec`
-encoders 1-4 = CC 12-15, `focus_select` encoders 5-8 = CC 12-15.
+encoders 1-4 = CC 12-15, `focus_stop` encoders 5-8 = CC 12-15.
 
 | control | does |
 |---|---|
@@ -173,7 +173,7 @@ encoders 1-4 = CC 12-15, `focus_select` encoders 5-8 = CC 12-15.
 | Play | play / stop toggle (the stock DAW note 94 worked on the OP-XY; whether to send MIDI Start / Stop instead is TBD) |
 | encoder *k* | by default its own mapping from the editor; if none: CC 12 on channel *k*. Encoders are relative, the OP-XY wants absolute values: the mixer keeps the value per (channel, CC) and sends it |
 | Rec *n* | **focus group Rec**: encoders 1-4 send CC 12-15 on channel *n*. One strip at a time (Rec on another strip moves it); LED lit while focused; pressing it again goes back to the default mappings |
-| Select *n* | **focus group Select**: same for encoders 5-8 |
+| Track stop *n* | **focus group Track stop**: same for encoders 5-8 |
 
 ### Values coming back (implemented, 2026-11-22)
 
@@ -203,7 +203,7 @@ itself on pairing, program change and project change. On the mixer side:
 | Shift + Mute | mod wheel (CC 1) |
 | Shift + Solo | pitch bend (14 bit; center detent behaviour TBD) |
 | Shift + Rec | suggestion: channel pressure (aftertouch) |
-| Shift + Select | suggestion: pan (CC 10, latched) |
+| Shift + Track stop | suggestion: pan (CC 10, latched) |
 | Shift + move a fader (no button) | suggestion: pan (CC 10) while Shift is held, momentary |
 
 Shift + fader can also be mapped **per fader** in the editor, like a macro control: e.g. Shift +
@@ -234,7 +234,7 @@ Instruments, YouTube `g7Wvq8PN-84`, around 8:00). Kept simple: any of the 8 page
 - **Step parameters on the same faders while a button row is held:**
   - hold **Solo** + move the fader: velocity;
   - hold **Rec** + move the fader: length (gate);
-  - hold **Select** + move the fader: probability.
+  - hold **Track stop** + move the fader: probability.
 - The faders are not motorized, so every view (note / velocity / length / probability) reuses the
   **fader mismatch LED** (solid while the fader is not at the step's stored value, off once it is)
   and the **pickup** behaviour: a fader only changes a value after it has reached it, so switching
@@ -243,10 +243,10 @@ Instruments, YouTube `g7Wvq8PN-84`, around 8:00). Kept simple: any of the 8 page
   on different channels.
 - Clock: MIDI clock from the host over USB (follows the DAW's tempo and start / stop).
 
-TBD: does holding *any* Solo (Rec, Select) switch all 8 faders to that parameter, or only that
+TBD: does holding *any* Solo (Rec, Track stop) switch all 8 faders to that parameter, or only that
 strip's button for that strip's fader (the first lets you set several steps at once); note range
 of a fader (all 128 notes, or a range / scale); how the playing step is shown (e.g. a moving LED
-on the Rec or Select row); what the encoders do on a sequencer page (pass through to the mapping,
+on the Rec or Track stop row); what the encoders do on a sequencer page (pass through to the mapping,
 or per-step extras); pattern length other than 8 (e.g. chaining two pages).
 
 ## Mapping
@@ -273,7 +273,7 @@ template name, focus groups, CRC) + up to 238 entries of 10 bytes, in the VM (ke
 whatever the version). Layout: `mixer_config.h`. Entry layer: bits 0..3 page (0 = all pages),
 bit 4 Shift, bit 5 DAW mode. Version 2 (64-byte header, one `cc_focus` CC for both groups, up to
 240 entries) is converted on the first boot of a firmware that knows version 3: `cc_focus` *c*
-became Rec = encoders 1-4 on *c*..*c*+3, Select = encoders 5-8 on the same. (Version 1, key 1,
+became Rec = encoders 1-4 on *c*..*c*+3, Track stop = encoders 5-8 on the same. (Version 1, key 1,
 was converted to version 2 by the firmwares of that time; version 3 firmwares no longer read it.)
 The editor and `host/mixer_cfg.py` convert older exports and templates the same way (`cc_knob`
 became `cc_encoder`).

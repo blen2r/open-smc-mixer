@@ -109,7 +109,7 @@ static void profile_defaults(mcfg_header_t *h)
     h->cc_fader_shift = 10;                         /* pan */
     h->cc_mute = 9;
     h->cc_encoder = 12;
-    /* Rec: encoders 1-4, Select: encoders 5-8 = the focused track's four parameters, CC 12-15 */
+    /* Rec: encoders 1-4, Track stop: encoders 5-8 = the focused track's four parameters, CC 12-15 */
     memset(h->focus, MCFG_NONE, sizeof(h->focus));
     for (int k = 0; k < 4; k++) {
         h->focus[0][k] = (u8)(12 + k);
@@ -192,7 +192,7 @@ static int store_active(void)
 
 /* A version 2 configuration (in staging, as read from the key) into version 3 (in active): the
  * header is the same up to the name; cc_focus (one CC) becomes the two groups it meant: Rec =
- * encoders 1-4 on cc_focus..+3, Select = encoders 5-8 on the same. */
+ * encoders 1-4 on cc_focus..+3, Track stop = encoders 5-8 on the same. */
 static int convert_v2(const u8 *v2, u8 *out)
 {
     const u32 magic = v2[0] | v2[1] << 8 | v2[2] << 16 | (u32)v2[3] << 24;

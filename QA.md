@@ -25,7 +25,7 @@ console must stay free of errors.
 ## 2. Guided hardware run
 
 Flash the build (`host/mixer_update.sh`), keep any Bluetooth device (the OP-XY) **disconnected**
-(the checks send test messages), no strip soloed, no Rec / Select focus lit. Then:
+(the checks send test messages), no strip soloed, no Rec / Track stop focus lit. Then:
 
 ```sh
 python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with mido --with python-rtmidi ...)
@@ -41,7 +41,7 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
    which page (wrong control, wrong page and stray messages are reported as such). A few ask
    yes / no about an LED. Covered:
    - encoders: CC, value ranges, program change, pitch bend, disabled, the CC profile's encoder CC;
-   - focus groups: Rec focus on chosen encoders, an empty slot left alone, Select sharing an
+   - focus groups: Rec focus on chosen encoders, an empty slot left alone, Track stop sharing an
      encoder (both buttons blink, Rec goes off), focus off;
    - faders: CC, pressure, Shift layer, pickup with the LED, page-only mappings and ranges;
    - buttons: toggle, momentary, trigger, program change, base explicitly, mappings removed and
@@ -67,6 +67,7 @@ Not automated (they need the device, a power cycle, or your eyes):
 | M6 | update keeps settings | `host/mixer_update.sh`, then the editor shows the same configuration |
 | M7 | resting faders | 30 s without touching anything, the editor's monitor stays empty (also while pressing buttons) |
 | M8 | values remembered | "Remember" on: move a fader, wait 6 s, power cycle; with pickup its LED shows the remembered value |
+| M9 | page while Shift | CC mode, pickup on, page 1. Hold Shift, move fader 1 to the middle (pan), let go of Shift, move fader 1 to the bottom (volume). Hold Shift: the LED above fader 1 blinks in bursts with solid in between (page 1, pan to pick up). Shift + fader 1 back to the middle: it blinks steadily. Shift + Fast-forward: now the LED above fader 2 blinks |
 
 ## Keeping this file current
 
@@ -81,3 +82,4 @@ Remove checks for behaviour that is gone. A configuration format change also upd
 |---|---|---|---|
 | 2026-11-23 | before modes / templates | 28 / 28 guided | after the fader noise fix |
 | 2026-11-23 | 07211bd (modes, templates) | all good (36 guided + manual) | first run with DAW / CC modes and templates |
+| 2026-11-23 | d12f4c8 (focus groups, encoders, format v3) | all good (45 guided) | v2 settings converted on the update |

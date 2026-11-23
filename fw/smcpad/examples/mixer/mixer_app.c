@@ -15,18 +15,19 @@
  *   Solo        (MCC_SOLO_MUTES) toggles solo: the other tracks are muted while any is soloed
  *   Rec         focus group Rec: every encoder k with a CC in focus[0][k] sends that CC on this
  *               track's channel (the others stay as they are); again: off
- *   Select      the same with focus[1]. If the two groups share an encoder, only one can be on:
+ *   Track stop  the same with focus[1]. If the two groups share an encoder, only one can be on:
  *               turning one on blinks both buttons fast for FOCUS_CONFLICT_MS, then the other
  *               goes off and this one on
  *   encoder k   CC cc_encoder on channel track_base + k (absolute: the mixer keeps the value)
  *   Play / Pause / Record / Rewind / FF / << / >> / arrows: the stock DAW notes
- *   Shift + Mute / Solo / Rec / Select   (MCC_SPECIAL) fader special mode: mod wheel / pitch
+ *   Shift + Mute / Solo / Rec / Track stop   (MCC_SPECIAL) fader special mode: mod wheel / pitch
  *               bend / channel pressure / pan (CC 10), toggles; the button's LED blinks while it
  *               is on; the button alone also ends it
  * DAW mode: the stock DAW mode (Mackie Control): encoders CC 16-23 relative, faders pitch bend 1-8
  *   with touch notes 104-111, buttons notes; LEDs follow the host.
  * Always:
  *   Shift + Rewind / Fast-forward        page down / up; the LED above fader <page> blinks fast
+ *                                        (and keeps blinking while Shift is held)
  *   Shift + Bluetooth + Play, held 2 s   the bootloader (DFU), for updates
  *   SysEx F0 7D 4D ... on USB-MIDI       the editor (mixer_config.c), 70 = bootloader,
  *                                        71 = echo diagnostics
@@ -60,7 +61,7 @@ enum { FM_VOLUME, FM_MODWHEEL, FM_PITCHBEND, FM_PRESSURE, FM_PAN };
 
 static u8 page;                                     /* 0-based */
 static u8 mute[16], solo[16], sent_mute[16];        /* CC mode: per track */
-static s8 focus[2] = { -1, -1 };                    /* CC mode: Rec / Select group: track, -1 = none */
+static s8 focus[2] = { -1, -1 };                    /* CC mode: Rec / Track stop group: track, -1 = none */
 #define FOCUS_CONFLICT_MS 500
 static struct {
     u32 at;                                         /* 0 = nothing waiting */
@@ -621,7 +622,7 @@ static void focus_tick(void)
     }
 }
 
-/* Rec (g = 0) / Select (g = 1) of track t pressed */
+/* Rec (g = 0) / Track stop (g = 1) of track t pressed */
 static void focus_press(int g, int t)
 {
     if (focus_wait.at) {                    /* pressed during a blink: finish it first */
@@ -641,7 +642,7 @@ static void focus_press(int g, int t)
     }
 }
 
-/* the LED of Rec / Select of track t: on while focused; both buttons of a conflict blink fast */
+/* the LED of Rec / Track stop of track t: on while focused; both buttons of a conflict blink fast */
 static int focus_led(int g, int t, int fast)
 {
     if (focus_wait.at && ((g == focus_wait.group && t == focus_wait.track) || (g != focus_wait.group && t == focus[g]))) {
@@ -675,7 +676,7 @@ static void cc_strip_button(int strip, int row, int down)
         }
         break;
     case SMCMIXER_ROW_REC:
-    case SMCMIXER_ROW_SELECT:
+    case SMCMIXER_ROW_STOP:
         focus_press(row - SMCMIXER_ROW_REC, t);
         break;
     }
@@ -787,6 +788,11 @@ static void leds_update(void)
             on = v != UNKNOWN && (v > fader_pos7[s] + 2 || v + 2 < fader_pos7[s]);
         } else {
             on = !picked[s];
+        }
+        /* Shift held: the LED above fader <page> blinks fast (the page). If that fader also has a
+         * value to pick up, the blinking comes in bursts with the LED solid in between. */
+        if (shift && !page_blink && s == page) {
+            on = (on && ((now / 400) & 1)) ? 1 : fast;
         }
         smcmixer_led_set(SMCMIXER_LED_FADER(s), on);
     }

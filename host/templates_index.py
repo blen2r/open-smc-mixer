@@ -19,9 +19,9 @@ TEMPLATES = ROOT / "editor" / "templates"
 NAME_LEN = 28
 TYPES = {"disabled", "cc", "note", "program", "pitchbend", "pressure", "base"}
 SETTINGS = {"pages", "track_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder",
-            "solo_mutes", "special_modes", "focus_rec", "focus_select"}
+            "solo_mutes", "special_modes", "focus_rec", "focus_stop"}
 NULLABLE = {"cc_fader_shift", "cc_mute", "cc_encoder"}
-OLD = {"cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_select"}
+OLD = {"cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_stop", "focus_select": "focus_stop"}
 
 
 def problems(t, path):
@@ -45,7 +45,7 @@ def problems(t, path):
         v = s.get(k)
         if not (v is None and k in NULLABLE) and not (isinstance(v, int) and 0 <= v <= 127):
             out.append(f"settings: {k} must be 0..127" + (" or null" if k in NULLABLE else ""))
-    for k in ("focus_rec", "focus_select"):
+    for k in ("focus_rec", "focus_stop"):
         g = s.get(k)
         if not (isinstance(g, list) and len(g) == 8 and all(v is None or (isinstance(v, int) and 0 <= v <= 127) for v in g)):
             out.append(f"settings: {k} must be 8 values, each a CC 0..127 or null (one per encoder)")

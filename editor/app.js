@@ -235,11 +235,11 @@ function renderGlobals() {
   html += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true) + '<span class="hint">empty: encoders send nothing (unless focused)</span>');
   const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
     `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
-  html += '<h3>Focus groups</h3><p class="hint">Rec (or Select) on a strip makes the encoders below send these CCs on that strip\'s track; again: off. An empty box leaves that encoder as it is. All empty: the button does nothing. If both groups use the same encoder, turning one on blinks both buttons and turns the other off.</p>';
+  html += '<h3>Focus groups</h3><p class="hint">Rec (or Track stop) on a strip makes the encoders below send these CCs on that strip\'s track; again: off. An empty box leaves that encoder as it is. All empty: the button does nothing. If both groups use the same encoder, turning one on blinks both buttons and turns the other off.</p>';
   html += field('Rec', focusRow('focus_rec', 'gFoR'));
-  html += field('Select', focusRow('focus_select', 'gFoS'));
+  html += field('Track stop', focusRow('focus_stop', 'gFoS'));
   if (focusOverlap(g)) html += '<p class="hint">These groups overlap (same encoder in both): only one can be on at a time.</p>';
-  html += field('Special modes', `<label><input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}> Shift + Mute / Solo / Rec / Select: fader = mod wheel / pitch bend / pressure / pan</label>`);
+  html += field('Special modes', `<label><input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}> Shift + Mute / Solo / Rec / Track stop: fader = mod wheel / pitch bend / pressure / pan</label>`);
   html += field('Pages', `<input type="number" id="gPages" min="1" max="8" value="${g.pages}">`);
   html += '<h3>Track of strip 1, per page</h3><p class="hint">Strip 1 of a page is this track; strips 2-8 are the next ones (after 16: 1 again). The track is the MIDI channel of the strip\'s fader, encoder and buttons. To send one control elsewhere, map it.</p><div class="tb">' +
     g.track_base.map((t, i) => `<label>page ${i + 1}<input type="number" class="gTb" data-i="${i}" min="1" max="16" value="${t + 1}"></label>`).join('') + '</div>';
@@ -265,7 +265,7 @@ function renderGlobals() {
     g.cc_encoder = cc('#gCcK', true);
     const box = el => { const v = el.value.trim(); return v === '' ? null : Math.max(0, Math.min(127, +v || 0)); };
     document.querySelectorAll('.gFoR').forEach(el => { g.focus_rec[+el.dataset.k] = box(el); });
-    document.querySelectorAll('.gFoS').forEach(el => { g.focus_select[+el.dataset.k] = box(el); });
+    document.querySelectorAll('.gFoS').forEach(el => { g.focus_stop[+el.dataset.k] = box(el); });
     g.special_modes = $('#gSpecial').checked;
     g.pages = Math.max(1, Math.min(8, +$('#gPages').value || 1));
     document.querySelectorAll('.gTb').forEach(el => { g.track_base[+el.dataset.i] = Math.max(1, Math.min(16, +el.value || 1)) - 1; });
@@ -389,8 +389,8 @@ function templateDoc(t) {
     `| Mute | ${s.cc_mute === null ? 'nothing' : `toggles ${cc(s.cc_mute)} 127 / 0`} |`,
     `| Solo | ${s.solo_mutes && s.cc_mute !== null ? 'mutes the other tracks' : 'nothing'} |`,
     `| Rec | ${focusDoc(s.focus_rec)} |`,
-    `| Select | ${focusDoc(s.focus_select)} |`,
-    `| Shift + Mute / Solo / Rec / Select | ${s.special_modes ? 'fader special modes: mod wheel / pitch bend / pressure / pan' : 'as without Shift'} |`,
+    `| Track stop | ${focusDoc(s.focus_stop)} |`,
+    `| Shift + Mute / Solo / Rec / Track stop | ${s.special_modes ? 'fader special modes: mod wheel / pitch bend / pressure / pan' : 'as without Shift'} |`,
     '', `Pages: ${s.pages}; strip 1 is track ${s.track_base.slice(0, s.pages).map(x => x + 1).join(' / ')} on page ${[...Array(s.pages).keys()].map(x => x + 1).join(' / ')}.`, ''];
   if (t.mappings.length) {
     lines.push('## Mappings', '', '| control | layer | sends |', '|---|---|---|');

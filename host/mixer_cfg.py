@@ -116,7 +116,7 @@ def decode(blob):
                name=name.split(b"\0")[0].decode("ascii", "replace"),
                cc_fader=cc(ccf), cc_fader_shift=cc(ccfs), cc_mute=cc(ccm), cc_encoder=cc(cce),
                solo_mutes=bool(flags & 1), special_modes=bool(flags & 2),
-               focus_rec=[cc(b) for b in frec], focus_select=[cc(b) for b in fsel], mappings=[])
+               focus_rec=[cc(b) for b in frec], focus_stop=[cc(b) for b in fsel], mappings=[])
     for i in range(n):
         c, layer, t, ch, num, fl, lo, hi = blob[HEADER + i * ENTRY: HEADER + i * ENTRY + 8]
         cfg["mappings"].append(dict(mode="daw" if layer & 0x20 else "cc", control=c, page=layer & 15,
@@ -127,16 +127,19 @@ def decode(blob):
 
 def normalize_settings(o):
     """Profile fields of older exports and templates, as the editor's normalizeSettings():
-    cc_knob -> cc_encoder; cc_focus (Rec = encoders 1-4 on it and the 3 next, Select = 5-8 on the
-    same) -> focus_rec / focus_select."""
+    cc_knob -> cc_encoder; cc_focus (Rec = encoders 1-4 on it and the 3 next, Track stop = 5-8 on the
+    same) -> focus_rec / focus_stop."""
     o = dict(o)
     if "cc_knob" in o:
         o.setdefault("cc_encoder", o["cc_knob"])
         del o["cc_knob"]
+    if "focus_select" in o:                 # the first version 3 editor's name for focus_stop
+        o.setdefault("focus_stop", o["focus_select"])
+        del o["focus_select"]
     if "cc_focus" in o:
         f = o.pop("cc_focus")
         o.setdefault("focus_rec", [None if f is None or k > 3 else (f + k) & 127 for k in range(8)])
-        o.setdefault("focus_select", [None if f is None or k < 4 else (f + k - 4) & 127 for k in range(8)])
+        o.setdefault("focus_stop", [None if f is None or k < 4 else (f + k - 4) & 127 for k in range(8)])
     return o
 
 
@@ -147,7 +150,7 @@ def normalize(cfg):
     base = cfg.pop("base", None)
     out = dict(mode="daw" if base == "daw" else "cc" if base else "daw", name="OP-XY - blen2r" if base != "daw" else "",
                cc_fader=7, cc_fader_shift=10, cc_mute=9, cc_encoder=12, solo_mutes=True, special_modes=True,
-               focus_rec=[12, 13, 14, 15] + [None] * 4, focus_select=[None] * 4 + [12, 13, 14, 15])
+               focus_rec=[12, 13, 14, 15] + [None] * 4, focus_stop=[None] * 4 + [12, 13, 14, 15])
     out.update(cfg)
     out.pop("version", None)
     out["mappings"] = [dict({"mode": "daw" if base == "daw" else "cc"}, **m) for m in cfg.get("mappings", [])]
@@ -164,7 +167,7 @@ def encode(cfg):
         int(cfg["remember_values"]), int(cfg["accel"]), cfg["accel_ms_x3"], cfg["accel_ms_x2"], cfg["pages"],
         bytes(cfg["track_base"]), cc(cfg["cc_fader"]), cc(cfg["cc_fader_shift"]), cc(cfg["cc_mute"]),
         cc(cfg["cc_encoder"]), 0, int(cfg["solo_mutes"]) | int(cfg["special_modes"]) << 1, 0,
-        name, bytes(cc(v) for v in cfg["focus_rec"]), bytes(cc(v) for v in cfg["focus_select"]), 0))
+        name, bytes(cc(v) for v in cfg["focus_rec"]), bytes(cc(v) for v in cfg["focus_stop"]), 0))
     ents = b"".join(bytes([m["control"], m["page"] | (16 if m["shift"] else 0) | (0x20 if m.get("mode") == "daw" else 0),
                            TYPES.index(m["type"]), m["channel"] - 1, m["number"], m["flags"], m["min"], m["max"], 0, 0])
                     for m in maps)

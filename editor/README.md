@@ -27,7 +27,7 @@ in the browser.
   all pages + Shift, all pages, then the mode.
 - **Settings**: the mixer's mode (also Shift + Left / Right on the mixer), CC mode's profile,
   **Choose a template…** and **Save as template…** ([templates/README.md](templates/README.md)).
-  - **Focus groups**: one row of 8 boxes for Rec, one for Select, one box per encoder. Rec on a
+  - **Focus groups**: one row of 8 boxes for Rec, one for Track stop, one box per encoder. Rec on a
     strip makes each encoder with a CC in its box send that CC on the strip's track; empty boxes
     leave the encoder alone. If both rows use the same encoder, only one group can be on at a time
     (on the mixer, both buttons blink and the other group goes off).

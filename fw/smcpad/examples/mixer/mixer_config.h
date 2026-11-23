@@ -27,10 +27,10 @@
  *    28  u8  cc_encoder        encoder: this CC on its strip's channel (MCFG_NONE: nothing)
  *    29  u8  reserved          (version 2: cc_focus, see focus below)
  *    30  u8  cc_flags          MCC_SOLO_MUTES: Solo mutes the other tracks (with cc_mute);
- *                              MCC_SPECIAL: Shift + Mute / Solo / Rec / Select = fader modes
+ *                              MCC_SPECIAL: Shift + Mute / Solo / Rec / Track stop = fader modes
  *    31  u8  reserved
  *    32  char name[28]         the template the profile came from ("OP-XY - blen2r"), NUL padded
- *    60  u8  focus[2][8]       the focus groups, [0] = Rec, [1] = Select: Rec on a strip makes
+ *    60  u8  focus[2][8]       the focus groups, [0] = Rec, [1] = Track stop: Rec on a strip makes
  *                              encoder k send CC focus[0][k] on that strip's channel, for every k
  *                              that is not MCFG_NONE (the others stay as they are); again: off.
  *                              A group of only MCFG_NONE: the button sends nothing.
@@ -114,7 +114,7 @@ typedef struct {
     uint8_t track_base[MCFG_PAGES];
     uint8_t cc_fader, cc_fader_shift, cc_mute, cc_encoder, rsv0, cc_flags, rsv1;
     char name[MCFG_NAME_LEN];
-    uint8_t focus[2][8];                    /* [0] = Rec, [1] = Select */
+    uint8_t focus[2][8];                    /* [0] = Rec, [1] = Track stop */
     uint32_t crc32;
 } __attribute__((packed)) mcfg_header_t;
 

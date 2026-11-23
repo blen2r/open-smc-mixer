@@ -15,7 +15,7 @@
   "solo_mutes": true,
   "special_modes": true,
   "focus_rec": [12, 13, 14, 15, null, null, null, null],
-  "focus_select": [null, null, null, null, 12, 13, 14, 15]
+  "focus_stop": [null, null, null, null, 12, 13, 14, 15]
  },
  "mappings": []
 }

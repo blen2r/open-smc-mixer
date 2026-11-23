@@ -85,9 +85,9 @@ console.log(JSON.stringify(out));
         if o["what"].startswith("old export"):
             check(M.normalize(OLD_EXPORT) == o["cfg"], "old export: Python normalizes it as the editor")
             want = dict(cc_encoder=20, focus_rec=[30, 31, 32, 33, None, None, None, None],
-                        focus_select=[None, None, None, None, 30, 31, 32, 33])
+                        focus_stop=[None, None, None, None, 30, 31, 32, 33])
             check(all(o["cfg"].get(k) == v for k, v in want.items()),
-                  "old export: cc_knob -> cc_encoder, cc_focus 30 -> Rec 1-4 / Select 5-8 on CC 30-33")
+                  "old export: cc_knob -> cc_encoder, cc_focus 30 -> Rec 1-4 / Track stop 5-8 on CC 30-33")
 
     print("firmware header")
     h = (ROOT / "fw/smcpad/examples/mixer/mixer_config.h").read_text()

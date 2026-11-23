@@ -4,7 +4,7 @@
 //     remember_values, accel, accel_ms_x3, accel_ms_x2, pages, track_base[8],
 //     CC mode's profile: name, cc_fader, cc_fader_shift, cc_mute, cc_encoder (a CC number, or null
 //       for none where allowed), solo_mutes, special_modes,
-//       focus_rec[8], focus_select[8] (per encoder: the CC it sends while the group is on, or null),
+//       focus_rec[8], focus_stop[8] (per encoder: the CC it sends while the group is on, or null),
 //     mappings: [{ mode: 'cc'|'daw', control, page (0 = all), shift, type, channel (1..16), number,
 //                  flags, min, max }] }
 // A template (editor/templates/*.json) is CC mode's part of it: the profile, pages, track bases,
@@ -25,14 +25,14 @@ const CFG = {
 
 // controls: 0..7 encoders, 8..15 faders, 16..60 buttons (smcmixer_hw.h order)
 const CONTROLS = (() => {
-  const rows = ['Mute', 'Solo', 'Rec', 'Select'];
+  const rows = ['Mute', 'Solo', 'Rec', 'Track stop'];
   const bottom = ['Play', 'Pause', 'Record', 'Rewind', 'Fast-forward', '<<', '>>', 'Up', 'Down', 'Left', 'Right'];
   const list = [];
   for (let k = 0; k < 8; k++) list.push({ id: k, kind: 'encoder', name: `Encoder ${k + 1}`, short: `E${k + 1}`, strip: k });
   for (let f = 0; f < 8; f++) list.push({ id: 8 + f, kind: 'fader', name: `Fader ${f + 1}`, short: `F${f + 1}`, strip: f });
   for (let b = 0; b < 32; b++) {
     const s = Math.floor(b / 4), r = b % 4;
-    list.push({ id: 16 + b, kind: 'button', name: `Strip ${s + 1} ${rows[r]}`, short: rows[r], strip: s, row: r });
+    list.push({ id: 16 + b, kind: 'button', name: `Strip ${s + 1} ${rows[r]}`, short: r === 3 ? 'Stop' : rows[r], strip: s, row: r });
   }
   bottom.forEach((n, i) => list.push({ id: 48 + i, kind: 'button', name: n, short: n, bottom: i }));
   list.push({ id: 59, kind: 'button', name: 'Bluetooth', short: 'BT', oval: 0 });
@@ -42,7 +42,7 @@ const CONTROLS = (() => {
 
 // What a mode does with a control when nothing is mapped, for the editor's "inherited" display.
 const DAW_NOTES = [94, 93, 95, 91, 92, 46, 47, 96, 97, 98, 99];
-const ROWS = ['mute', 'solo', 'rec', 'select'];
+const ROWS = ['mute', 'solo', 'rec', 'stop'];
 
 function reservedFor(id, shift) {
   if (id === 60) return 'Shift';
@@ -66,8 +66,8 @@ function baseDescription(cfg, id, page, shift, mode) {
   const tr = tb + (c.strip || 0) + 1;
   const name = cfg.name ? `${cfg.name}: ` : '';
   if (c.kind === 'encoder') {
-    const fr = cfg.focus_rec[c.strip], fs = cfg.focus_select[c.strip];
-    const focus = [fr === null ? null : `Rec focus: CC ${fr}`, fs === null ? null : `Select focus: CC ${fs}`]
+    const fr = cfg.focus_rec[c.strip], fs = cfg.focus_stop[c.strip];
+    const focus = [fr === null ? null : `Rec focus: CC ${fr}`, fs === null ? null : `Track stop focus: CC ${fs}`]
       .filter(Boolean).join(', ');
     const own = cfg.cc_encoder === null ? 'nothing' : `CC ${cfg.cc_encoder} ch ${tr}`;
     return `${name}${own}${focus ? ` (${focus}, of the focused track)` : ''}`;
@@ -83,7 +83,7 @@ function baseDescription(cfg, id, page, shift, mode) {
     const what = [
       cfg.cc_mute === null ? null : `mute track ${tr} (CC ${cfg.cc_mute})`,
       cfg.solo_mutes && cfg.cc_mute !== null ? `solo track ${tr} (mutes the others)` : null,
-      focusText(cfg.focus_rec, tr), focusText(cfg.focus_select, tr)][c.row];
+      focusText(cfg.focus_rec, tr), focusText(cfg.focus_stop, tr)][c.row];
     return what ? name + what : 'nothing';
   }
   if (c.bottom !== undefined) return `note ${DAW_NOTES[c.bottom]} (as the stock DAW mode)`;
@@ -109,15 +109,15 @@ function baseShort(cfg, id, page, shift, mode) {
   if (c.row !== undefined) {
     if (shift && cfg.special_modes) return ['→ mod', '→ bend', '→ press', '→ pan'][c.row];
     return [cfg.cc_mute === null ? '—' : `mute T${tr}`, cfg.solo_mutes && cfg.cc_mute !== null ? `solo T${tr}` : '—',
-            focusUsed(cfg.focus_rec) ? `focus T${tr}` : '—', focusUsed(cfg.focus_select) ? `focus T${tr}` : '—'][c.row];
+            focusUsed(cfg.focus_rec) ? `focus T${tr}` : '—', focusUsed(cfg.focus_stop) ? `focus T${tr}` : '—'][c.row];
   }
   if (c.bottom !== undefined) return `note ${DAW_NOTES[c.bottom]}`;
   return '—';
 }
 
-// Focus groups (Rec / Select): per encoder a CC or null.
+// Focus groups (Rec / Track stop): per encoder a CC or null.
 const focusUsed = g => g.some(v => v !== null);
-const focusOverlap = cfg => cfg.focus_rec.some((v, k) => v !== null && cfg.focus_select[k] !== null);
+const focusOverlap = cfg => cfg.focus_rec.some((v, k) => v !== null && cfg.focus_stop[k] !== null);
 function focusText(g, tr) {
   const used = g.map((v, k) => (v === null ? null : `${k + 1}`)).filter(Boolean);
   return used.length ? `encoders ${used.join(', ')} focus on track ${tr}` : null;
@@ -134,9 +134,9 @@ function crc32(bytes) {
 
 // CC mode's profile and what a template carries
 const PROFILE_FIELDS = ['name', 'cc_fader', 'cc_fader_shift', 'cc_mute', 'cc_encoder', 'solo_mutes', 'special_modes',
-                        'focus_rec', 'focus_select'];
+                        'focus_rec', 'focus_stop'];
 const TEMPLATE_SETTINGS = ['pages', 'track_base', 'follow_incoming', 'cc_fader', 'cc_fader_shift', 'cc_mute', 'cc_encoder',
-                           'solo_mutes', 'special_modes', 'focus_rec', 'focus_select'];
+                           'solo_mutes', 'special_modes', 'focus_rec', 'focus_stop'];
 const N = null;
 
 function defaultConfig() {
@@ -147,7 +147,7 @@ function defaultConfig() {
     track_base: [0, 8, 0, 8, 0, 8, 0, 8],
     name: 'OP-XY - blen2r', cc_fader: 7, cc_fader_shift: 10, cc_mute: 9, cc_encoder: 12,
     solo_mutes: true, special_modes: true,
-    focus_rec: [12, 13, 14, 15, N, N, N, N], focus_select: [N, N, N, N, 12, 13, 14, 15],
+    focus_rec: [12, 13, 14, 15, N, N, N, N], focus_stop: [N, N, N, N, 12, 13, 14, 15],
     mappings: [],
   };
 }
@@ -180,7 +180,7 @@ function encodeConfig(cfg) {
   buf[30] = (cfg.solo_mutes ? 1 : 0) | (cfg.special_modes ? 2 : 0);
   const name = (cfg.name || '').replace(/[^\x20-\x7e]/g, '?').slice(0, CFG.NAME_LEN);
   for (let i = 0; i < name.length; i++) buf[32 + i] = name.charCodeAt(i);
-  for (let k = 0; k < 8; k++) { buf[60 + k] = ccByte(cfg.focus_rec[k]); buf[68 + k] = ccByte(cfg.focus_select[k]); }
+  for (let k = 0; k < 8; k++) { buf[60 + k] = ccByte(cfg.focus_rec[k]); buf[68 + k] = ccByte(cfg.focus_stop[k]); }
   cfg.mappings.forEach((m, i) => {
     const o = CFG.HEADER + i * CFG.ENTRY;
     buf[o] = m.control;
@@ -214,7 +214,7 @@ function decodeConfig(buf) {
     name: String.fromCharCode(...(end < 0 ? nameBytes : nameBytes.slice(0, end))),
     cc_fader: ccVal(buf[25]), cc_fader_shift: ccVal(buf[26]), cc_mute: ccVal(buf[27]), cc_encoder: ccVal(buf[28]),
     solo_mutes: !!(buf[30] & 1), special_modes: !!(buf[30] & 2),
-    focus_rec: Array.from(buf.slice(60, 68), ccVal), focus_select: Array.from(buf.slice(68, 76), ccVal),
+    focus_rec: Array.from(buf.slice(60, 68), ccVal), focus_stop: Array.from(buf.slice(68, 76), ccVal),
     mappings: [],
   };
   for (let i = 0; i < n; i++) {
@@ -229,17 +229,21 @@ function decodeConfig(buf) {
 }
 
 // Profile fields of older exports and templates: cc_knob -> cc_encoder; cc_focus (one CC: Rec =
-// encoders 1-4 on it and the 3 next, Select = encoders 5-8 on the same) -> the two focus groups.
+// encoders 1-4 on it and the 3 next, Track stop = encoders 5-8 on the same) -> the two focus groups.
 function normalizeSettings(o) {
   const out = Object.assign({}, o);
   if ('cc_knob' in out) {
     if (!('cc_encoder' in out)) out.cc_encoder = out.cc_knob;
     delete out.cc_knob;
   }
+  if ('focus_select' in out) {               // the first version 3 editor's name for focus_stop
+    if (!('focus_stop' in out)) out.focus_stop = out.focus_select;
+    delete out.focus_select;
+  }
   if ('cc_focus' in out) {
     const f = out.cc_focus;
     if (!('focus_rec' in out)) out.focus_rec = [0, 1, 2, 3, 4, 5, 6, 7].map(k => (f === null || k > 3 ? null : (f + k) & 127));
-    if (!('focus_select' in out)) out.focus_select = [0, 1, 2, 3, 4, 5, 6, 7].map(k => (f === null || k < 4 ? null : (f + k - 4) & 127));
+    if (!('focus_stop' in out)) out.focus_stop = [0, 1, 2, 3, 4, 5, 6, 7].map(k => (f === null || k < 4 ? null : (f + k - 4) & 127));
     delete out.cc_focus;
   }
   return out;

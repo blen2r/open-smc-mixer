@@ -14,7 +14,7 @@
    Enter to end one early, "s" + Enter to skip it.
 
 Keep the OP-XY (or any Bluetooth host) disconnected: the checks send test messages. Start with no
-strip soloed and no Rec / Select focus lit (those change what the base profile sends).
+strip soloed and no Rec / Track stop focus lit (those change what the base profile sends).
 """
 import argparse
 import json
@@ -36,7 +36,7 @@ GREEN, RED, YEL, DIM, BOLD, OFF = "\033[32m", "\033[31m", "\033[33m", "\033[2m",
 # controls (editor/config.js CONTROLS)
 ENC = lambda k: k - 1                       # encoders; 1-based names, as printed on the mixer
 FADER = lambda f: 8 + f - 1
-STRIP = lambda s, row: 16 + (s - 1) * 4 + ["mute", "solo", "rec", "select"].index(row)
+STRIP = lambda s, row: 16 + (s - 1) * 4 + ["mute", "solo", "rec", "stop"].index(row)
 BTN = {n: 48 + i for i, n in enumerate(["play", "pause", "record", "rewind", "ff", "<<", ">>",
                                         "up", "down", "left", "right"])}
 BTN["shift"] = 60
@@ -49,7 +49,7 @@ def control_name(c):
         return f"Fader {c - 7}"
     if c < 48:
         b = c - 16
-        return f"Strip {b // 4 + 1} {['Mute', 'Solo', 'Rec', 'Select'][b % 4]}"
+        return f"Strip {b // 4 + 1} {['Mute', 'Solo', 'Rec', 'Track stop'][b % 4]}"
     names = ["Play", "Pause", "Record", "Rewind", "Fast-forward", "<<", ">>", "Up", "Down", "Left",
              "Right", "Bluetooth", "Shift"]
     return names[c - 48] if c - 48 < len(names) else f"control {c}"
@@ -129,7 +129,7 @@ In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
      c. Click {bold}Down{off}: Type CC, channel 1, CC number {bold}52{off}, Button {bold}toggle{off}.
      d. Settings: {bold}Pages 3{off}.
      e. Mode bar on {bold}DAW{off}: click {bold}Down{off}: Type CC, channel 1, CC number {bold}71{off} (momentary).
-     f. Settings, Focus groups: in the {bold}Select{off} row, box {bold}6{off}: {bold}64{off} (the template name
+     f. Settings, Focus groups: in the {bold}Track stop{off} row, box {bold}6{off}: {bold}64{off} (the template name
         above becomes "custom").
   3. {bold}Save to mixer{off}. (Leave the editor open; you can tick "highlight controls" and watch the
      monitor during the hardware checks.)
@@ -146,7 +146,7 @@ def expected_config():
     cfg["mappings"].append(dict(mode="daw", control=BTN["down"], page=0, shift=False, type="cc", channel=1,
                                 number=71, flags=0, min=0, max=127))
     cfg["pages"] = 3
-    cfg["focus_select"][5] = 64
+    cfg["focus_stop"][5] = 64
     cfg["name"] = ""                        # a profile edited by hand is no longer the template's
     return cfg
 
@@ -223,10 +223,11 @@ def checks(qa):
         return f
 
     def pickup_prep():
-        input(f"   Put {BOLD}fader 3 all the way down{OFF}, then press Enter ")
+        input(f"   First put {BOLD}fader 3 all the way down{OFF}, then press Enter ")
         time.sleep(2)                       # past the echo window of the fader's own last values
         qa.send([0xB5, 30, 64])             # CC 30 ch 6 = 64: the fader is now below its value
         print(f"   {DIM}(sent CC 30 = 64 on ch 6 to the mixer){OFF}")
+        print(f"   Now {BOLD}slowly push fader 3 all the way up{OFF}.")
 
     return [
         C("Press Shift + Rewind twice (to be sure you are on page 1). Then press Enter.", ctl=BTN["rewind"],
@@ -246,7 +247,7 @@ def checks(qa):
         C("Hold Shift and move fader 1 (the macro: CC 13 ch 12).", ctl=FADER(1), shift=True,
           need=[cc(12, 13)]),
         C("Move fader 2.", ctl=FADER(2), need=[pressure(5)]),
-        C("Pickup: slowly push fader 3 all the way up.", ctl=FADER(3), prep=pickup_prep,
+        C("Pickup on fader 3, in two steps:", ctl=FADER(3), prep=pickup_prep,
           need=[cc(6, 30, 64, 127), cc(6, 30, value=127)], allow=cc(6, 30, 64, 127),
           ask=("Before you moved it, was the LED above fader 3 lit (solid)? And is it off now?")),
         C("Move fader 4 (page 1: base profile, volume of track 4).", ctl=FADER(4), page=1, need=[cc(4, 7)]),
@@ -269,25 +270,26 @@ def checks(qa):
           need=[note_on(1, 96), note_off(1, 96)], exact=2),
         C("Hold Shift, press and release Up (trigger: note 61 on and off at once).", ctl=BTN["up"],
           shift=True, need=[note_on(1, 61), note_off(1, 61)], exact=2),
-        # focus groups (Rec: encoder 3 -> CC 60, 6 -> 61, 7 -> 62; Select: 6 -> 64, from the editor)
+        # focus groups (Rec: encoder 3 -> CC 60, 6 -> 61, 7 -> 62; Track stop: 6 -> 64, from the editor)
         C("Press Strip 2 Rec once (focus on track 2: sends nothing). Then press Enter.", ctl=STRIP(2, "rec"),
           silent=True, ask="Is the Strip 2 Rec LED lit?"),
         C("Turn encoder 3 a little (Rec focus: CC 60 of track 2).", ctl=ENC(3), page=1, need=[cc(2, 60)]),
         C("Turn encoder 7 a little (Rec focus: CC 62 of track 2).", ctl=ENC(7), page=1, need=[cc(2, 62)]),
         C("Turn encoder 8 a little (empty in the Rec group: as usual, CC 12 of track 8).", ctl=ENC(8), page=1,
           need=[cc(8, 12)]),
-        C("Press Strip 4 Select once (its group shares encoder 6 with Rec). Then press Enter.",
-          ctl=STRIP(4, "select"), silent=True,
-          ask="Did Strip 2 Rec and Strip 4 Select blink fast together for about half a second, then "
-              "Strip 2 Rec go off and Strip 4 Select stay lit?"),
-        C("Turn encoder 6 a little (Select focus: CC 64 of track 4).", ctl=ENC(6), page=1, need=[cc(4, 64)]),
+        C("Press Strip 4 Track stop once (its group shares encoder 6 with Rec). Then press Enter.",
+          ctl=STRIP(4, "stop"), silent=True,
+          ask="Did Strip 2 Rec and Strip 4 Track stop blink fast together for about half a second, then "
+              "Strip 2 Rec go off and Strip 4 Track stop stay lit?"),
+        C("Turn encoder 6 a little (Track stop focus: CC 64 of track 4).", ctl=ENC(6), page=1, need=[cc(4, 64)]),
         C("Turn encoder 3 a little (Rec is off now: CC 12 of track 3).", ctl=ENC(3), page=1, need=[cc(3, 12)]),
-        C("Press Strip 4 Select again (focus off). Then press Enter.", ctl=STRIP(4, "select"), silent=True,
-          ask="Is the Strip 4 Select LED off?"),
+        C("Press Strip 4 Track stop again (focus off). Then press Enter.", ctl=STRIP(4, "stop"), silent=True,
+          ask="Is the Strip 4 Track stop LED off?"),
         C("Turn encoder 6 a little (no focus: CC 12 of track 6).", ctl=ENC(6), page=1, need=[cc(6, 12)]),
         # pages
-        C("Press Shift + Fast-forward once (page 2). Then press Enter.", ctl=BTN["ff"], silent=True,
-          shift=True, ask="Did the page indicator blink?"),
+        C("Hold Shift, press Fast-forward once (page 2), keep holding Shift 2 s. Then press Enter.",
+          ctl=BTN["ff"], silent=True, shift=True,
+          ask="While you held Shift, did the LED above fader 2 keep blinking fast (the page)?"),
         C("Turn encoder 3 to the right a little (page 2: program changes 0..10, ch 3).",
           ctl=ENC(3), page=2, need=[program(3, 0, 10)], allow=program(3, 0, 10)),
         C("Move fader 4 over its whole travel (page 2: CC 40 ch 8, range 20..100).", ctl=FADER(4), page=2,
