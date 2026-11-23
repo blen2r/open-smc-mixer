@@ -242,13 +242,13 @@ function renderGlobals() {
   ph += '<p class="hint">What CC mode sends where nothing is mapped, for one device. A template sets this card and CC mode\'s mappings; your preferences (Settings) and DAW mode stay. Backup / Restore (top) save the whole mixer instead.</p>';
   if (state.profileOpen) {
     let c1 = '<h3>Controls</h3>';
-    c1 += field('Fader CC', ccIn('gCcF', g.cc_fader), 'Each fader sends this CC on its strip\'s channel (OP-XY: 7, volume).');
-    c1 += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true), 'While Shift is held, faders send this CC instead (OP-XY: 10, pan). Empty: the same as without Shift.');
+    c1 += field('Fader CC', ccIn('gCcF', g.cc_fader), 'Each fader sends this CC on its strip\'s channel (CC 7 is the usual volume).');
+    c1 += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true), 'While Shift is held, faders send this CC instead (e.g. CC 10, the usual pan). Empty: the same as without Shift.');
     c1 += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true), 'Each encoder sends this CC on its strip\'s channel, as an absolute value the mixer keeps. Empty: encoders send nothing, unless a focus group is on.');
     c1 += field('Mute CC', ccIn('gCcM', g.cc_mute, true), 'Mute toggles this CC between 127 (muted) and 0; the LED shows it. Empty: Mute sends nothing.');
     const soloMode = g.solo_mutes ? 'mute' : g.cc_solo !== null ? 'cc' : 'off';
     c1 += field('Solo', `<select id="gSolo">${opt('mute', soloMode, 'mutes the other channels')}${opt('cc', soloMode, 'sends a CC')}${opt('off', soloMode, 'nothing')}</select>`,
-      'Mutes the other channels: for devices without a solo CC (the OP-XY); while any strip is soloed, every other channel gets the Mute CC, and their own mute states come back when solo ends. Sends a CC: the device\'s own solo, toggled 127 / 0 on the strip\'s channel. The LED shows the solo either way.');
+      'Mutes the other channels: for devices without a solo CC; while any strip is soloed, every other channel gets the Mute CC, and their own mute states come back when solo ends. Sends a CC: the device\'s own solo, toggled 127 / 0 on the strip\'s channel. The LED shows the solo either way.');
     if (soloMode === 'cc') c1 += field('Solo CC', ccIn('gCcS', g.cc_solo), 'The CC Solo toggles between 127 (soloed) and 0, on the strip\'s channel.');
     c1 += `<h3>Shift + button: the fader sends${tipIcon('Shift + a strip button switches that strip\'s fader to what is set here (the button blinks); the button again switches it back. Nothing: Shift + the button does what the button does.')}</h3>`;
     ['Mute', 'Solo', 'Rec', 'Track Stop'].forEach((b, k) => {
@@ -258,7 +258,7 @@ function renderGlobals() {
     });
     const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
       `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
-    let c2 = `<h3>Focus groups${tipIcon('Rec (or Track Stop) on a strip turns its group on for that strip\'s channel: each encoder with a CC in the row sends that CC on that channel; press again: off. Typical use: a device channel\'s parameters on the encoders (the OP-XY: a track\'s four parameters).')}</h3><p class="hint">One box per encoder (1-8).</p>`;
+    let c2 = `<h3>Focus groups${tipIcon('Rec (or Track Stop) on a strip turns its group on for that strip\'s channel: each encoder with a CC in the row sends that CC on that channel; press again: off. Typical use: a channel\'s parameters on the encoders.')}</h3><p class="hint">One box per encoder (1-8).</p>`;
     c2 += `<div class="flabel">Rec${tipIcon('Encoders with a CC here send it on the channel of the strip whose Rec you pressed. An empty box leaves that encoder as it is. All empty: Rec does nothing.')}</div>${focusRow('focus_rec', 'gFoR')}`;
     c2 += `<div class="flabel">Track Stop${tipIcon('The same for the Track Stop button (the bottom button of each strip). If both rows use the same encoder, only one group can be on: turning one on blinks both buttons and turns the other off.')}</div>${focusRow('focus_stop', 'gFoS')}`;
     if (focusOverlap(g)) c2 += '<p class="hint">These groups overlap (same encoder in both): only one can be on at a time.</p>';
