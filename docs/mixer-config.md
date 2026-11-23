@@ -24,7 +24,7 @@ the base and anything can be overridden**, per page and per Shift layer:
 | track button | 8 x 4 | `T1.1..T8.4` | column x row, top row = 1; have LEDs |
 | global button | 11 | `G1..G11` | bottom row, left to right: Play, Pause, Record, Rewind, Fast-forward, `<<`, `>>`, Up, Down, Left, Right |
 | oval button | 2 | `O1`, `O2` | top right: O1 = Bluetooth, O2 = **Shift** (neither sends MIDI) |
-| LED | TBD | | "the light above every fader" -- TBD which LEDs those are |
+| fader LED | 8 | `L1..L8` | under each knob / above each fader; stock: lit when fader position != host value |
 
 ## DAW mode defaults (stock fw 013, captured 2026-11-22)
 
@@ -101,6 +101,22 @@ differ. Setting `fader_takeover`:
 A **global** value, overridable **per page and per fader mapping** (`inherit` | `jump` | `pickup`).
 Knobs are endless encoders and do not need it.
 
+### Fader mismatch LED
+
+Each fader has an LED above it (the lights under the knobs). Like the stock DAW mode, it lights while
+the fader's physical position differs from the value it should have, so you know which faders need to
+be moved before they take effect:
+
+- **DAW default mapping:** the target is the value the host sends back (MCU pitch bend on the
+  fader's channel), as in stock.
+- **Our mappings (pages / Shift):** the target is the last value stored for that page and mapping.
+  With `pickup` the LED goes off once the fader picks the value up; with `jump` it is only lit
+  until the fader is moved.
+- Setting `fader_led`: `mismatch` (default) | `off`. TBD: tolerance, and whether the LED can show
+  the direction (blink rate / brightness) if the hardware allows it.
+
+The page-change blink (above) uses the same LEDs and takes priority for its ~1 s.
+
 ## Mapping
 
 | field | values | applies to |
@@ -157,7 +173,7 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
 - Midi-Suite-like device drawing; click a control to edit it.
 - **Page selector 1..8 + "all pages"**, **Normal / Shift** toggle; every control shows where its
   current value comes from (this layer / inherited from ... / DAW default).
-- Global settings (fader takeover, page LED blink).
+- Global settings (fader takeover, fader mismatch LED, page LED blink).
 - Live MIDI monitor, JSON import / export, a simulated device for working without the hardware.
 
 ## Open questions
