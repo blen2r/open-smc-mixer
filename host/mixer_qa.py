@@ -176,6 +176,12 @@ def compare(got, want):
     return out
 
 
+def looks_like_qa(cfg):
+    """Most of the QA mappings are there (the QA configuration, with or without the editor changes)."""
+    qa = {mapping_key(m) for m in json.load(open(QA_CONFIG))["mappings"]}
+    return len(qa & {mapping_key(m) for m in cfg["mappings"]}) >= len(qa) // 2
+
+
 def strip_version(cfg):
     cfg = dict(cfg)
     cfg.pop("version", None)
@@ -377,10 +383,21 @@ def main():
     h = m.hello()
     print(f"mixer: firmware {h['fw']}, configuration {h['length']} bytes, page {h['page']}")
     os.makedirs(WORK, exist_ok=True)
-    backup = os.path.join(WORK, time.strftime("qa_backup_%Y%m%d_%H%M%S.json"))
-    original = strip_version(decode(m.read()))
-    json.dump(original, open(backup, "w"), indent=1)
-    print(f"your configuration is saved in {backup}")
+    current = strip_version(decode(m.read()))
+    if looks_like_qa(current):
+        # a QA run left its configuration on the mixer: yours is the latest backup that is not QA
+        olds = [os.path.join(WORK, f) for f in sorted(os.listdir(WORK)) if f.startswith("qa_backup_")]
+        olds = [f for f in olds if not looks_like_qa(json.load(open(f)))]
+        if not olds:
+            sys.exit("the mixer holds the QA configuration and there is no backup of yours in work/")
+        backup = olds[-1]
+        original = json.load(open(backup))
+        print(f"the mixer still holds the QA configuration; yours is {backup}")
+    else:
+        backup = os.path.join(WORK, time.strftime("qa_backup_%Y%m%d_%H%M%S.json"))
+        original = current
+        json.dump(original, open(backup, "w"), indent=1)
+        print(f"your configuration is saved in {backup}")
 
     want = expected_config()
     if args.no_editor:
