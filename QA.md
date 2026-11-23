@@ -33,7 +33,7 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
 
 1. It backs your configuration up to `work/qa_backup_<time>.json` (restored at the end; on a rerun
    it finds your last real backup instead of backing up its own test configuration).
-2. **Editor round trip.** You import `host/qa/qa_config.json` in the editor, make seven listed
+2. **Editor round trip.** You restore `host/qa/qa_config.json` in the editor (**Restore…**), make seven listed
    changes (in both modes), save; the script reads the configuration back and compares it with
    what it should be.
 3. **53 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script

@@ -6,7 +6,7 @@
     python3 host/mixer_qa.py --from 12      # start the hardware checks at check 12
 
 1. Your current configuration is saved to work/qa_backup_<time>.json (and restored at the end).
-2. Editor: you import host/qa/qa_config.json in the web editor, make seven listed changes (in both modes) and save.
+2. Editor: you restore host/qa/qa_config.json in the web editor (Restore…), make seven listed changes (in both modes) and save.
    The script reads the configuration back and checks it is exactly the QA one plus the changes.
 3. Hardware: the script asks for one action at a time ("turn encoder 1 right") and checks the MIDI the
    mixer sends on USB. It knows which control you touched (editor events), so a wrong control or
@@ -122,7 +122,7 @@ def any_of(*ps):
 
 EDITOR_STEPS = """\
 In the editor ({bold}host/mixer_editor.sh{off}, Chrome):
-  1. Connect (USB), then {bold}Import{off} host/qa/qa_config.json and {bold}Save to mixer{off}.
+  1. Connect (USB), then {bold}Restore…{off} host/qa/qa_config.json and {bold}Save to mixer{off}.
   2. Make these seven changes (Mode bar on {bold}CC{off}, page "All pages", layer Normal, unless said):
      a. Click {bold}Encoder 1{off}, change the CC number 20 -> {bold}22{off}.
      b. Click {bold}Strip 4 Mute{off} (marked disabled), click {bold}Remove mapping{off}.

@@ -319,7 +319,7 @@ F0 7D 4D <cmd> <seq> <payload, 7-bit packed> F7       4D = "M" (Mixer)
   template's `.md`), **Save as template…** (downloads the `.json` and a started `.md`).
 - Global settings (fader takeover, fader mismatch LED, page LED blink, encoder acceleration: on / off
   and its curve, overridable per encoder).
-- Live MIDI monitor, JSON import / export, a simulated device for working without the hardware.
+- Live MIDI monitor, backup / restore to a JSON file, a simulated device for working without the hardware.
 
 ## Open questions
 

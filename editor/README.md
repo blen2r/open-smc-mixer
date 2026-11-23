@@ -3,7 +3,7 @@
 A static web page that edits the mixer's configuration over USB-MIDI (Web MIDI, with SysEx):
 DAW / CC mode, mappings per mode, page and Shift layer, CC mode's profile and device templates,
 global settings, a live monitor, JSON
-import / export, and a simulated mixer for working without the hardware. The model and the
+backup / restore to a file, and a simulated mixer for working without the hardware. The model and the
 protocol are in [docs/mixer-config.md](../docs/mixer-config.md); the firmware side is
 `fw/smcpad/examples/mixer/mixer_config.c`.
 
