@@ -130,6 +130,7 @@ the CC mode profile card). Strip *n* of page *p* = track / MIDI channel `track_b
 | `cc_fader_shift` | Shift + fader | this CC while Shift is held (none: as without Shift) |
 | `cc_mute` | Mute | toggles this CC 127 / 0; LED = muted (none: Mute sends nothing) |
 | `solo_mutes` | Solo | toggles solo by muting (`cc_mute`) the other tracks while any is soloed |
+| `cc_solo` | Solo | with `solo_mutes` off: toggles this CC 127 / 0 on the strip's channel (the device's own solo); LED = soloed (none, and `solo_mutes` off: Solo sends nothing) |
 | `cc_encoder` | encoder | this CC on the strip's channel (absolute, the mixer keeps the value; none: nothing) |
 | `focus_rec` | Rec | focus group: 8 slots, one per encoder, each a CC or none. Rec on a strip makes every encoder with a CC send it on that strip's track; the others stay as they are; again: off. All none: Rec sends nothing |
 | `focus_stop` | Track stop | the same, a second group |

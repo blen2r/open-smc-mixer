@@ -12,7 +12,8 @@
  *   fader       CC cc_fader (takeover per setting; the LED above it is lit while it has not
  *               picked its value up); Shift + fader: CC cc_fader_shift while Shift is held
  *   Mute        toggles mute, CC cc_mute = 127 / 0
- *   Solo        (MCC_SOLO_MUTES) toggles solo: the other tracks are muted while any is soloed
+ *   Solo        (MCC_SOLO_MUTES) toggles solo: the other tracks are muted while any is soloed;
+ *               (MCC_SOLO_CC) toggles CC cc_solo = 127 / 0 instead
  *   Rec         focus group Rec: every encoder k with a CC in focus[0][k] sends that CC on this
  *               track's channel (the others stay as they are); again: off
  *   Track stop  the same with focus[1]. If the two groups share an encoder, only one can be on:
@@ -673,6 +674,9 @@ static void cc_strip_button(int strip, int row, int down)
         if (mcfg->cc_flags & MCC_SOLO_MUTES) {
             solo[t] ^= 1;
             update_mutes();
+        } else if ((mcfg->cc_flags & MCC_SOLO_CC) && !(mcfg->cc_solo & MCFG_NONE)) {
+            solo[t] ^= 1;                   /* the device's own solo; the LED shows it */
+            send_cc(t, mcfg->cc_solo, solo[t] ? 127 : 0);
         }
         break;
     case SMCMIXER_ROW_REC:

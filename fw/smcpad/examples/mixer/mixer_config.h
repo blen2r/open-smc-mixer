@@ -25,8 +25,10 @@
  *    26  u8  cc_fader_shift    Shift + fader: this CC (MCFG_NONE: the same as without Shift)
  *    27  u8  cc_mute           Mute buttons toggle this CC 127 / 0 (MCFG_NONE: they send nothing)
  *    28  u8  cc_encoder        encoder: this CC on its strip's channel (MCFG_NONE: nothing)
- *    29  u8  reserved          (version 2: cc_focus, see focus below)
- *    30  u8  cc_flags          MCC_SOLO_MUTES: Solo mutes the other tracks (with cc_mute);
+ *    29  u8  cc_solo           with MCC_SOLO_CC: Solo toggles this CC 127 / 0 on the strip's channel
+ *                              (version 2: cc_focus, see focus below)
+ *    30  u8  cc_flags          MCC_SOLO_MUTES: Solo mutes the other tracks (with cc_mute; wins
+ *                              over MCC_SOLO_CC); MCC_SOLO_CC: Solo sends cc_solo; neither: nothing;
  *                              MCC_SPECIAL: Shift + Mute / Solo / Rec / Track stop = fader modes
  *    31  u8  reserved
  *    32  char name[28]         the template the profile came from ("OP-XY - blen2r"), NUL padded
@@ -68,6 +70,7 @@
 #define MCFG_NONE           0x80            /* "no CC" in the profile fields */
 #define MCC_SOLO_MUTES      0x01
 #define MCC_SPECIAL         0x02
+#define MCC_SOLO_CC         0x04
 #define MCFG_NAME_LEN       28
 
 /* controls */
@@ -112,7 +115,7 @@ typedef struct {
     uint8_t mode, fader_takeover, fader_led, follow_incoming, remember_values;
     uint8_t accel, accel_ms_x3, accel_ms_x2, pages;
     uint8_t track_base[MCFG_PAGES];
-    uint8_t cc_fader, cc_fader_shift, cc_mute, cc_encoder, rsv0, cc_flags, rsv1;
+    uint8_t cc_fader, cc_fader_shift, cc_mute, cc_encoder, cc_solo, cc_flags, rsv1;
     char name[MCFG_NAME_LEN];
     uint8_t focus[2][8];                    /* [0] = Rec, [1] = Track stop */
     uint32_t crc32;

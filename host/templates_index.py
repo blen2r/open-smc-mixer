@@ -19,8 +19,8 @@ TEMPLATES = ROOT / "editor" / "templates"
 NAME_LEN = 28
 TYPES = {"disabled", "cc", "note", "program", "pitchbend", "pressure", "base"}
 SETTINGS = {"pages", "track_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder",
-            "solo_mutes", "special_modes", "focus_rec", "focus_stop"}
-NULLABLE = {"cc_fader_shift", "cc_mute", "cc_encoder"}
+            "solo_mutes", "cc_solo", "special_modes", "focus_rec", "focus_stop"}
+NULLABLE = {"cc_fader_shift", "cc_mute", "cc_encoder", "cc_solo"}
 OLD = {"cc_knob": "cc_encoder", "cc_focus": "focus_rec / focus_stop", "focus_select": "focus_stop"}
 
 
@@ -41,7 +41,7 @@ def problems(t, path):
         out.append(f'settings: "{k}" is from an older editor, now {OLD[k]} (save the template again)')
     for k in sorted(SETTINGS - set(s)):
         out.append(f'settings: missing "{k}"')
-    for k in ("cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder"):
+    for k in ("cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder", "cc_solo"):
         v = s.get(k)
         if not (v is None and k in NULLABLE) and not (isinstance(v, int) and 0 <= v <= 127):
             out.append(f"settings: {k} must be 0..127" + (" or null" if k in NULLABLE else ""))

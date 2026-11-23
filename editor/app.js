@@ -246,7 +246,10 @@ function renderGlobals() {
     c1 += field('Shift + fader', ccIn('gCcFS', g.cc_fader_shift, true), 'While Shift is held, faders send this CC instead (OP-XY: 10, pan). Empty: the same as without Shift.');
     c1 += field('Encoder CC', ccIn('gCcK', g.cc_encoder, true), 'Each encoder sends this CC on its strip\'s track channel, as an absolute value the mixer keeps. Empty: encoders send nothing, unless a focus group is on.');
     c1 += field('Mute CC', ccIn('gCcM', g.cc_mute, true), 'Mute toggles this CC between 127 (muted) and 0; the LED shows it. Empty: Mute sends nothing.');
-    c1 += field('Solo', `<input type="checkbox" id="gSolo" ${g.solo_mutes ? 'checked' : ''}>`, 'For devices without a solo CC: Solo mutes every other track (with the Mute CC) while any track is soloed, and puts their own mute states back when solo ends.');
+    const soloMode = g.solo_mutes ? 'mute' : g.cc_solo !== null ? 'cc' : 'off';
+    c1 += field('Solo', `<select id="gSolo">${opt('mute', soloMode, 'mutes the other tracks')}${opt('cc', soloMode, 'sends a CC')}${opt('off', soloMode, 'nothing')}</select>`,
+      'Mutes the other tracks: for devices without a solo CC (the OP-XY); while any track is soloed, every other track gets the Mute CC, and their own mute states come back when solo ends. Sends a CC: the device\'s own solo, toggled 127 / 0 on the strip\'s track. The LED shows the solo either way.');
+    if (soloMode === 'cc') c1 += field('Solo CC', ccIn('gCcS', g.cc_solo), 'The CC Solo toggles between 127 (soloed) and 0, on the strip\'s track channel.');
     c1 += field('Special modes', `<input type="checkbox" id="gSpecial" ${g.special_modes ? 'checked' : ''}>`, 'Shift + Mute / Solo / Rec / Track stop turn that strip\'s fader into mod wheel / pitch bend / channel pressure / pan (CC 10). The button blinks while it is on; press it again to go back to the fader CC.');
     const focusRow = (key, cls) => '<div class="fg">' + g[key].map((v, k) =>
       `<label>${k + 1}<input type="number" class="${cls}" data-k="${k}" min="0" max="127" value="${v === null ? '' : v}" placeholder="–"></label>`).join('') + '</div>';
@@ -286,7 +289,9 @@ function renderGlobals() {
       g.cc_fader = cc('#gCcF');
       g.cc_fader_shift = cc('#gCcFS', true);
       g.cc_mute = cc('#gCcM', true);
-      g.solo_mutes = $('#gSolo').checked;
+      const sm = $('#gSolo').value;
+      g.solo_mutes = sm === 'mute';
+      g.cc_solo = sm !== 'cc' ? null : $('#gCcS') ? cc('#gCcS') : 8;
       g.cc_encoder = cc('#gCcK', true);
       document.querySelectorAll('.gFoR').forEach(el => { g.focus_rec[+el.dataset.k] = box(el); });
       document.querySelectorAll('.gFoS').forEach(el => { g.focus_stop[+el.dataset.k] = box(el); });
@@ -417,7 +422,7 @@ function templateDoc(t) {
     `| Shift + fader | ${s.cc_fader_shift === null ? 'as without Shift' : cc(s.cc_fader_shift)} |`,
     `| encoder | ${cc(s.cc_encoder)} on the strip's channel |`,
     `| Mute | ${s.cc_mute === null ? 'nothing' : `toggles ${cc(s.cc_mute)} 127 / 0`} |`,
-    `| Solo | ${s.solo_mutes && s.cc_mute !== null ? 'mutes the other tracks' : 'nothing'} |`,
+    `| Solo | ${s.solo_mutes ? (s.cc_mute !== null ? 'mutes the other tracks' : 'nothing') : s.cc_solo !== null ? `toggles ${cc(s.cc_solo)} 127 / 0` : 'nothing'} |`,
     `| Rec | ${focusDoc(s.focus_rec)} |`,
     `| Track stop | ${focusDoc(s.focus_stop)} |`,
     `| Shift + Mute / Solo / Rec / Track stop | ${s.special_modes ? 'fader special modes: mod wheel / pitch bend / pressure / pan' : 'as without Shift'} |`,

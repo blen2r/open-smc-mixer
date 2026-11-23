@@ -109,6 +109,7 @@ static void profile_defaults(mcfg_header_t *h)
     h->cc_fader_shift = 10;                         /* pan */
     h->cc_mute = 9;
     h->cc_encoder = 12;
+    h->cc_solo = MCFG_NONE;                         /* the OP-XY has no solo CC: Solo mutes */
     /* Rec: encoders 1-4, Track stop: encoders 5-8 = the focused track's four parameters, CC 12-15 */
     memset(h->focus, MCFG_NONE, sizeof(h->focus));
     for (int k = 0; k < 4; k++) {
@@ -207,7 +208,8 @@ static int convert_v2(const u8 *v2, u8 *out)
     defaults(out);
     memcpy(out + 8, v2 + 8, 60 - 8);                /* mode .. name: same places */
     h->version = MCFG_VERSION;
-    h->rsv0 = h->rsv1 = 0;
+    h->cc_solo = MCFG_NONE;
+    h->rsv1 = 0;
     memset(h->focus, MCFG_NONE, sizeof(h->focus));
     if (!(focus & MCFG_NONE)) {
         for (int k = 0; k < 4; k++) {

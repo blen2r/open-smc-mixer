@@ -53,4 +53,4 @@ Node for tests), `device.js` (Web MIDI and the simulated mixer), `app.js` (the p
 ## QA
 
 See [QA.md](../QA.md): `host/selftest.py` offline, `host/mixer_qa.py` on the hardware (the editor
-round trip and 45 guided checks).
+round trip and 47 guided checks).

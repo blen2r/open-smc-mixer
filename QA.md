@@ -36,7 +36,7 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
 2. **Editor round trip.** You import `host/qa/qa_config.json` in the editor, make six listed
    changes (in both modes), save; the script reads the configuration back and compares it with
    what it should be.
-3. **46 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script
+3. **47 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script
    checks every MIDI message the mixer sends on USB, and knows which control you touched and on
    which page (wrong control, wrong page and stray messages are reported as such). A few ask
    yes / no about an LED. Covered:
@@ -45,7 +45,7 @@ python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with
      encoder (both buttons blink, Rec goes off), focus off;
    - faders: CC, pressure, Shift layer, pickup with the LED, page-only mappings and ranges;
    - buttons: toggle, momentary, trigger, program change, base explicitly, mappings removed and
-     added in the editor, the profile's mute;
+     added in the editor, the profile's mute and Solo CC;
    - pages: Shift + Rewind / Fast-forward, per-page track bases, the editor's page count, the page
      LED while Shift is held (steady, and in bursts when that fader has a value to pick up);
    - modes: Shift + Left / Right, the arrow LEDs, DAW mode's Mackie messages, per-mode mappings,
@@ -70,6 +70,7 @@ Not automated (they need the device, a power cycle, or your eyes):
 | M8 | values remembered | "Remember" on: move a fader, wait 6 s, power cycle; with pickup its LED shows the remembered value |
 | M9 | page while Shift | CC mode, pickup on, page 1. Hold Shift, move fader 1 to the middle (pan), let go of Shift, move fader 1 to the bottom (volume). Hold Shift: the LED above fader 1 blinks in bursts with solid in between (page 1, pan to pick up). Shift + fader 1 back to the middle: it blinks steadily. Shift + Fast-forward: now the LED above fader 2 blinks |
 | M10 | restore | Backup…, then Restore… that file: same configuration; Restore… a template `.json`: applied as a template (DAW mappings and Settings unchanged) |
+| M11 | solo by muting | the OP-XY template, CC mode, monitor open: Solo on strip 1: CC 9 = 127 on channels 2-16 and the Solo LED lit; Solo again: CC 9 = 0 on them (except tracks muted by their own Mute) |
 
 ## Keeping this file current
 
