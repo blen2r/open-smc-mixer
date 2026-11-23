@@ -197,7 +197,8 @@ static int knob_accel(int k, int steps)
     u32 now = smcpad_millis(), dt = now - last[k];
 
     last[k] = now;
-    return steps * (dt < 8 ? 4 : dt < 16 ? 3 : dt < 30 ? 2 : 1);
+    /* edges ~15 ms apart are a moderate pace (half a turn a second): no boost there */
+    return steps * (dt < 6 ? 3 : dt < 12 ? 2 : 1);
 }
 
 static void knob_turned(int k, int steps)
