@@ -152,9 +152,10 @@ static void matrix_pass_done(u64 m)
 
         encoder_ab[e] = ab;
         if (step) {
-            /* one detent = 4 quadrature steps on these knobs? TBD: report every 2 for now */
+            /* smooth knobs (no detents): every quadrature edge is a step, ~360 degrees for
+             * 128 of them; the application adds acceleration */
             encoder_sub[e] += step;
-            if (encoder_sub[e] >= 2 || encoder_sub[e] <= -2) {
+            if (encoder_sub[e] >= 1 || encoder_sub[e] <= -1) {
                 s8 d = encoder_sub[e] > 0 ? 1 : -1;
 
                 encoder_sub[e] = 0;

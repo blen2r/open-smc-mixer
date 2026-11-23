@@ -189,9 +189,22 @@ static void faders_retarget_all(void)
 
 /* ------------------------------------------------------------------ knobs */
 
+/* Acceleration: steps that come quickly count more (a fast spin covers the range in under a
+ * turn), slow ones stay single for fine control. */
+static int knob_accel(int k, int steps)
+{
+    static u32 last[SMCMIXER_NUM_ENCODERS];
+    u32 now = smcpad_millis(), dt = now - last[k];
+
+    last[k] = now;
+    return steps * (dt < 8 ? 4 : dt < 16 ? 3 : dt < 30 ? 2 : 1);
+}
+
 static void knob_turned(int k, int steps)
 {
     int ch, slot;
+
+    steps = knob_accel(k, steps);
 
     if (k < 4 && focus_a >= 0) {
         ch = focus_a, slot = k;
