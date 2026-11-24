@@ -232,9 +232,11 @@ def checks(qa):
         print(f"   Now {BOLD}slowly push fader 3 all the way up{OFF}.")
 
     def shift_pickup_prep():
-        input(f"   Leave {BOLD}fader 3 at the top{OFF} (where the pickup check left it), then press Enter ")
+        input(f"   First put {BOLD}fader 3 all the way up{OFF}, then press Enter ")
         qa.send([0xB5, 30, 64])             # CC 30 ch 6 = 64: fader 3 (all pages) is now above its value
-        print(f"   {DIM}(sent CC 30 = 64 on ch 6 to the mixer){OFF}")
+        print(f"   {DIM}(sent CC 30 = 64 on ch 6: the mixer now thinks fader 3's value is the middle, so the "
+              f"fader needs picking up and its LED is solid){OFF}")
+        print(f"   Now {BOLD}hold Shift for 2 s{OFF} and watch the LED above fader 3; then let go and press Enter.")
 
     return [
         C("Press Shift + Rewind twice (to be sure you are on page 1). Then press Enter.", ctl=BTN["rewind"],
@@ -318,10 +320,10 @@ def checks(qa):
         C("Press Shift + Fast-forward once more (page 3, the editor's Pages change). Then press Enter.",
           ctl=BTN["ff"], silent=True, shift=True),
         C("Move fader 1 (page 3: CC 7 on ch 1).", ctl=FADER(1), page=3, need=[cc(1, 7)]),
-        C("Hold Shift 2 s, then let go and press Enter. (Page 3, and fader 3 now has a value to pick up.)",
+        C("Page indicator and pickup on the same LED (page 3, fader 3), in two steps:",
           ctl=BTN["shift"], silent=True, prep=shift_pickup_prep,
-          ask="While Shift was held, did the LED above fader 3 blink in bursts with the LED solid in "
-              "between (page 3 + pickup)? And is it solid now that Shift is released?"),
+          ask="While Shift was held, did the LED above fader 3 alternate between bursts of fast blinking "
+              "(= page 3) and solid (= needs pickup)? And now that Shift is released, is it simply solid?"),
         C("Press Shift + Rewind twice, back to page 1. Then press Enter.", ctl=BTN["rewind"], silent=True,
           shift=True),
         # modes
