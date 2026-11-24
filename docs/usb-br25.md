@@ -50,7 +50,14 @@ None of this is in any datasheet we have; each item cost a debugging session.
    `FIFOFull`.
 3. **One buffer per direction is right**; software ping-pong of `RADR` (what the SDK's bulk
    read does) loses the first bytes of the next packet whenever the switch lands during its
-   reception.
+   reception. But each RX buffer must be **two packets long**: the packet queued behind the
+   head one can be DMAed at `RADR` as it arrives, before the driver rewinds `RADR`, so it lands
+   right after the head packet. It is written again at the start of the buffer when it
+   becomes the head (its data comes out right), so the early copy only needs room. With 64
+   bytes it overwrote the next variable: for EP4 (MIDI OUT) TinyUSB's event queue, losing the
+   OUT completion (USB-MIDI dead until replugged) or feeding usbd a garbage event. Found with
+   back-to-back 118-byte SysEx (2026-11-24): a hang within 2..2700 rounds before, none in
+   8000 after. Reading `RADR` back does not give the DMA address.
 4. **EP0**: the TinyUSB MUSB driver's state machine works unchanged (ported with the FIFO
    reads replaced by `EP0_ADR`), including its two subtleties, both seen here: the host's
    STATUS OUT can complete in the same interrupt as the last DATA IN packet, and usbd (a task)

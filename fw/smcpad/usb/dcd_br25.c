@@ -201,7 +201,14 @@ static uint16_t sie_read16(uint8_t lo)
 #define MAXP_REG        0xFF
 static uint8_t ep0_buf[EP0_SIZE] __attribute__((aligned(4)));
 static uint8_t ep_tx_buf[EP_MAX][EP_BUF_SIZE] __attribute__((aligned(4)));
-static uint8_t ep_rx_buf[EP_MAX][EP_BUF_SIZE] __attribute__((aligned(4)));
+/* RX buffers are twice the packet size. The packet the FIFO queues behind the head one can be
+ * DMAed into RAM at RADR as it arrives, before ep_out_take() rewinds RADR -- i.e. right after
+ * the head packet, past a 64-byte buffer. It is written again at the start of the buffer when
+ * it becomes the head, so its data is right; the early copy only needs somewhere harmless to
+ * land. With 64 bytes it landed on whatever the linker put next: TinyUSB's event queue behind
+ * EP4 (MIDI OUT), whose completion event it overwrote -- USB-MIDI dead until replugged, or a
+ * garbage event (docs/usb-br25.md). RADR does not read back as an address. */
+static uint8_t ep_rx_buf[EP_MAX][2 * EP_BUF_SIZE] __attribute__((aligned(4)));
 
 typedef struct {
     uint8_t *buf;
