@@ -94,5 +94,5 @@ Remove checks for behaviour that is gone. A configuration format change also upd
 | date | firmware (commit) | result | notes |
 |---|---|---|---|
 | 2026-11-23 | before modes / templates | 28 / 28 guided | after the fader noise fix |
-| 2026-11-23 | 07211bd (modes, templates) | all good (36 guided + manual) | first run with DAW / CC modes and templates |
-| 2026-11-23 | d12f4c8 (focus groups, encoders, format v3) | all good (45 guided) | v2 settings converted on the update |
+| 2026-11-23 | f77bfc2 (modes, templates) | all good (36 guided + manual) | first run with DAW / CC modes and templates |
+| 2026-11-23 | f9816e1 (focus groups, encoders, format v3) | all good (45 guided) | v2 settings converted on the update |
