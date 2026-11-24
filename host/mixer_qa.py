@@ -590,9 +590,20 @@ def main():
 
 def restore(m, original):
     a = input("\nRestore your previous configuration? [Y/n] ").strip().lower()
-    if not a.startswith("n"):
+    if a.startswith("n"):
+        return
+    try:
         st = m.write(encode(original))
-        print("restored" if st == 0 else f"{RED}restore refused (status {st}){OFF}")
+    except SystemExit:
+        # the port went stale while we waited (the mixer was unplugged or power cycled, e.g. for a
+        # manual check): open it again
+        try:
+            st = Mixer().write(encode(original))
+        except SystemExit as e:
+            print(f"{RED}could not restore ({e}){OFF}: run this script again, it finds the QA "
+                  "configuration on the mixer and offers your backup from work/")
+            return
+    print("restored" if st == 0 else f"{RED}restore refused (status {st}){OFF}")
 
 
 if __name__ == "__main__":
