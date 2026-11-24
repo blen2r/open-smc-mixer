@@ -93,6 +93,7 @@ enum {
     MT_PITCHBEND,
     MT_PRESSURE,
     MT_BASE,                /* what the base profile does here (explicitly, above a broader layer) */
+    MT_TRANSPORT,           /* buttons: MIDI Start / Stop, alternately (LED = playing); fields unused */
     MT_COUNT
 };
 

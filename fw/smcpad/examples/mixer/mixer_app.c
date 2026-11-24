@@ -20,7 +20,8 @@
  *               turning one on blinks both buttons fast for FOCUS_CONFLICT_MS, then the other
  *               goes off and this one on
  *   encoder k   CC cc_encoder on channel channel_base + k (absolute: the mixer keeps the value)
- *   Play / Pause / Record / Rewind / FF / << / >> / arrows: the stock DAW notes
+ *   Play        MIDI Start / Stop, alternately (LED = playing; a Start / Stop received sets it)
+ *   Pause / Record / Rewind / FF / << / >> / arrows: the stock DAW notes
  *   Shift + Mute / Solo / Rec / Track Stop   fader special mode, fader_special[row]: the strip's
  *               fader sends that CC / pitch bend / channel pressure instead, toggles; the button's
  *               LED blinks while it is on; the button alone also ends it. MCFG_NONE: Shift + the
@@ -100,6 +101,15 @@ static void midi_send(u8 status, u8 d1, u8 d2)
 
     smcpad_usbmidi_write(pkt);
     mixer_blemidi_send(msg, len);
+}
+
+/* a one-byte real-time message (MIDI Start FA, Stop FC, ...) on USB and BLE */
+static void midi_realtime(u8 b)
+{
+    u8 pkt[4] = { 0x0F, b, 0, 0 };
+
+    smcpad_usbmidi_write(pkt);
+    mixer_blemidi_send(&b, 1);
 }
 
 void mixer_sysex_send(const u8 *d, u32 n)           /* whole message, F0 .. F7, USB only */
@@ -550,11 +560,25 @@ static const u8 daw_note_of_button[SMCMIXER_NUM_BUTTONS] = {
     94, 93, 95, 91, 92, 46, 47, 96, 97, 98, 99, 0xFF, 0xFF,
 };
 
+/* Start / Stop, alternately: what devices (the OP-XY) start and stop on */
+static void transport_toggle(void)
+{
+    playing ^= 1;
+    midi_realtime(playing ? 0xFA : 0xFC);
+}
+
 static void mapped_button(int b, const mcfg_entry_t *e, int down)
 {
     u8 mode = e->flags & MF_BUTTON_MASK;
     u8 lo = e->min, hi = e->max ? e->max : 127;
     int on;
+
+    if (e->type == MT_TRANSPORT) {
+        if (down) {
+            transport_toggle();
+        }
+        return;
+    }
 
     if (mode == MF_TOGGLE) {
         if (!down) {
@@ -741,6 +765,12 @@ static void button(int b, int down)
         cc_strip_button(b / 4, b % 4, down);
         return;
     }
+    if (mcfg->mode == MODE_CC && b == SMCMIXER_BTN_PLAY) {    /* CC mode: Start / Stop */
+        if (down) {
+            transport_toggle();
+        }
+        return;
+    }
     if (b == SMCMIXER_BTN_PLAY && down) {
         playing ^= 1;
     }
@@ -769,7 +799,8 @@ static void leds_update(void)
         } else if (b == SMCMIXER_BTN_BLUETOOTH) {
             on = mixer_blemidi_connected() ? 1 : blink && (now / 1000) % 3 == 0;
         } else if ((e = mcfg_resolve(MCTL_BUTTON(b), page + 1, shift)) != NULL) {
-            on = (e->flags & MF_BUTTON_MASK) == MF_TOGGLE ? btn_toggle[b] : smcmixer_button(b);
+            on = e->type == MT_TRANSPORT ? playing
+                 : (e->flags & MF_BUTTON_MASK) == MF_TOGGLE ? btn_toggle[b] : smcmixer_button(b);
         } else if (mcfg->mode == MODE_CC && b < 32) {
             int s = b / 4, row = b % 4, t = track_of(s);
 
@@ -818,6 +849,11 @@ static void midi_in(u8 status, u8 d1, u8 d2)
 {
     u8 type = status & 0xF0, ch = status & 0x0F;
     u8 val = type == 0xD0 ? d1 & 127 : d2 & 127;
+
+    if (status == 0xFA || status == 0xFB || status == 0xFC) {     /* the device started / stopped */
+        playing = status != 0xFC;
+        return;
+    }
 
     /* DAW: the host sets the button LEDs with notes */
     if (mcfg->mode == MODE_DAW && (type == 0x90 || type == 0x80) && ch == 0) {
@@ -913,6 +949,10 @@ static void usbmidi_in(const u8 pkt[4])
 
     if (cin >= 0x8 && cin <= 0xE) {
         midi_in(pkt[1], pkt[2], pkt[3]);
+        return;
+    }
+    if (cin == 0xF && pkt[1] >= 0xF8) {    /* a real-time byte (Start / Stop / clock) */
+        midi_in(pkt[1], 0, 0);
         return;
     }
     if (!n) {

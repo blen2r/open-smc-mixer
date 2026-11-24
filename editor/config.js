@@ -16,7 +16,7 @@
 const CFG = {
   MAGIC: 'SMXC', VERSION: 4, HEADER: 84, ENTRY: 10, MAX_ENTRIES: 238, MAX_BYTES: 2464,
   NONE: 0x80, NAME_LEN: 28, LAYER_SHIFT: 0x10, LAYER_DAW: 0x20,
-  TYPES: ['disabled', 'cc', 'note', 'program', 'pitchbend', 'pressure', 'base'],
+  TYPES: ['disabled', 'cc', 'note', 'program', 'pitchbend', 'pressure', 'base', 'transport'],
   MODES: ['daw', 'cc'],
   TAKEOVERS: ['jump', 'pickup'],
   // flags
@@ -88,6 +88,7 @@ function baseDescription(cfg, id, page, shift, mode) {
       focusText(cfg.focus_rec, tr), focusText(cfg.focus_stop, tr)][c.row];
     return what ? name + what : 'nothing';
   }
+  if (c.bottom === 0) return `${name}MIDI Start / Stop, alternately (LED = playing)`;
   if (c.bottom !== undefined) return `note ${DAW_NOTES[c.bottom]} (as the stock DAW mode)`;
   return 'nothing';
 }
@@ -113,6 +114,7 @@ function baseShort(cfg, id, page, shift, mode) {
     return [cfg.cc_mute === null ? '—' : `mute ch${tr}`, soloText(cfg, tr) ? `solo ch${tr}` : '—',
             focusUsed(cfg.focus_rec) ? `focus ch${tr}` : '—', focusUsed(cfg.focus_stop) ? `focus ch${tr}` : '—'][c.row];
   }
+  if (c.bottom === 0) return 'start/stop';
   if (c.bottom !== undefined) return `note ${DAW_NOTES[c.bottom]}`;
   return '—';
 }

@@ -31,6 +31,7 @@ function mappingText(m) {
     case 'program': return `PC ${m.number} ${ch}`;
     case 'pitchbend': return `pitch bend ${ch}`;
     case 'pressure': return `pressure ${ch}`;
+    case 'transport': return 'Start / Stop';
     default: return m.type;
   }
 }
@@ -155,12 +156,14 @@ function renderEditor() {
   else src = `Not mapped on ${layer}: ${state.mode === 'daw' ? 'DAW mode' : 'CC mode'} does <b>${baseDescription(state.cfg, id, state.page, state.shift, state.mode)}</b>.`;
 
   const m = here || { type: 'inherit', channel: 1, number: 0, flags: 0, min: 0, max: 127 };
-  const types = ['inherit', 'disabled', 'cc', 'note', 'program', 'pitchbend', 'pressure', 'base'];
+  const types = ['inherit', 'disabled', 'cc', 'note', 'program', 'pitchbend', 'pressure', ...(c.kind === 'button' ? ['transport'] : []), 'base'];
   const typeLabels = { inherit: 'inherit (no mapping here)', disabled: 'disabled (send nothing)', cc: 'CC', note: 'note',
-    program: 'program change', pitchbend: 'pitch bend', pressure: 'channel pressure', base: 'base profile (explicitly)' };
+    program: 'program change', pitchbend: 'pitch bend', pressure: 'channel pressure',
+    transport: 'Start / Stop (MIDI transport)', base: 'base profile (explicitly)' };
   let html = `<h2>${c.name}</h2><div class="src">${src}</div>`;
   html += field('Type', `<select id="eType">${types.map(t => `<option value="${t}" ${m.type === t || (!here && t === 'inherit') ? 'selected' : ''}>${typeLabels[t]}</option>`).join('')}</select>`);
-  const active = here && !['disabled', 'base'].includes(here.type);
+  const active = here && !['disabled', 'base', 'transport'].includes(here.type);
+  if (here && here.type === 'transport') html += '<p class="hint">Each press sends MIDI Start, then Stop, then Start... (the LED shows playing). What most devices start and stop on.</p>';
   if (active) {
     html += field('Channel', `<input type="number" id="eCh" min="1" max="16" value="${m.channel}">`);
     if (['cc', 'note', 'program'].includes(m.type)) {

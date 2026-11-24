@@ -22,7 +22,7 @@ the LED above the fader of the new page's number blinks for a second.
 | Rec | focus: encoders 1-4 send CC 12-15 (the track's four parameters) of this track; again: back to normal |
 | Track Stop | focus: encoders 5-8 send CC 12-15 of this track; again: back to normal. Rec and Track Stop use different encoders, so both can be on (on different tracks) |
 | Shift + Mute / Solo / Rec / Track Stop | the fader becomes mod wheel (CC 1) / pitch bend / channel pressure / pan (CC 10) for this track; the button blinks; the button again ends it |
-| Play | note 94: start / stop |
+| Play | MIDI Start / Stop, alternately: plays and stops the OP-XY (the LED shows playing) |
 | other transport and arrow buttons | the stock DAW notes (Pause 93, Record 95, << 46, >> 47, Up 96, Down 97) |
 
 ## Notes

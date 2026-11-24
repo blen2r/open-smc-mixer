@@ -131,11 +131,12 @@ the CC mode profile card). Strip *n* of page *p* sends on MIDI channel `channel_
 | `cc_mute` | Mute | toggles this CC 127 / 0; LED = muted (none: Mute sends nothing) |
 | `solo_mutes` | Solo | toggles solo by muting (`cc_mute`) the other channels while any strip is soloed |
 | `cc_solo` | Solo | with `solo_mutes` off: toggles this CC 127 / 0 on the strip's channel (the device's own solo); LED = soloed (none, and `solo_mutes` off: Solo sends nothing) |
+| | Play | MIDI Start / Stop, alternately (LED = playing); DAW mode keeps the Mackie note 94. Any button can be mapped to Start / Stop (type `transport`) |
 | `cc_encoder` | encoder | this CC on the strip's channel (absolute, the mixer keeps the value; none: nothing) |
 | `focus_rec` | Rec | focus group: 8 slots, one per encoder, each a CC or none. Rec on a strip makes every encoder with a CC send it on that strip's channel; the others stay as they are; again: off. All none: Rec sends nothing |
 | `focus_stop` | Track Stop | the same, a second group |
 | `fader_special` | Shift + Mute / Solo / Rec / Track Stop | per button: what the strip's fader sends until the button is pressed again: a CC, pitch bend, channel pressure, or nothing (Shift + the button then does what the button does) |
-| | transport, arrows | the stock DAW notes |
+| | Pause, Record, Rewind, Fast-forward, `<<`, `>>`, arrows | the stock DAW notes |
 
 **Focus groups.** One strip per group at a time (Rec on another strip moves it); the button's LED
 is lit while its group is on that strip. Both groups can be on together when they use different
@@ -171,7 +172,7 @@ encoders 1-4 = CC 12-15, `focus_stop` encoders 5-8 = CC 12-15.
 | fader *n* | volume: CC 7, channel *n* (pickup + mismatch LED as everywhere) |
 | Mute *n* | toggles mute: CC 9 = 127 / 0 on channel *n*; LED = muted |
 | Solo *n* | toggles solo -- the OP-XY has none, so the mixer does it: it mutes (CC 9) the other tracks and restores them when solo goes off; LED = soloed (suggestion, TBD) |
-| Play | play / stop toggle (the stock DAW note 94 worked on the OP-XY; whether to send MIDI Start / Stop instead is TBD) |
+| Play | MIDI Start / Stop, alternately (checked 2026-11-23: the OP-XY starts and stops on them; it does not react to the DAW note 94); LED = playing, also set by a Start / Stop received |
 | encoder *k* | by default its own mapping from the editor; if none: CC 12 on channel *k*. Encoders are relative, the OP-XY wants absolute values: the mixer keeps the value per (channel, CC) and sends it |
 | Rec *n* | **focus group Rec**: encoders 1-4 send CC 12-15 on channel *n*. One strip at a time (Rec on another strip moves it); LED lit while focused; pressing it again goes back to the default mappings |
 | Track Stop *n* | **focus group Track Stop**: same for encoders 5-8 |

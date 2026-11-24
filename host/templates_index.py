@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "editor" / "templates"
 NAME_LEN = 28
-TYPES = {"disabled", "cc", "note", "program", "pitchbend", "pressure", "base"}
+TYPES = {"disabled", "cc", "note", "program", "pitchbend", "pressure", "base", "transport"}
 SETTINGS = {"pages", "channel_base", "follow_incoming", "cc_fader", "cc_fader_shift", "cc_mute", "cc_encoder",
             "solo_mutes", "cc_solo", "fader_special", "focus_rec", "focus_stop"}
 NULLABLE = {"cc_fader_shift", "cc_mute", "cc_encoder", "cc_solo"}

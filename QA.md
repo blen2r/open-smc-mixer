@@ -42,7 +42,7 @@ skips the editor round trip; check the editor with `?sim` and by hand).
 2. **Editor round trip.** You restore `host/qa/qa_config.json` in the editor (**Restore…**), make seven listed
    changes (in both modes), save; the script reads the configuration back and compares it with
    what it should be.
-3. **53 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script
+3. **55 hardware checks.** One action at a time ("turn encoder 2 a lot to the right"); the script
    checks every MIDI message the mixer sends on USB, and knows which control you touched and on
    which page (wrong control, wrong page and stray messages are reported as such). A few ask
    yes / no about an LED. Covered:
@@ -53,7 +53,8 @@ skips the editor round trip; check the editor with `?sim` and by hand).
      Shift + Rec with nothing set behaves as Rec;
    - faders: CC, pressure, Shift layer, pickup with the LED, page-only mappings and ranges;
    - buttons: toggle, momentary, trigger, program change, base explicitly, mappings removed and
-     added in the editor, the profile's mute and Solo CC;
+     added in the editor, the profile's mute and Solo CC, Play's MIDI Start / Stop
+     (CC mode) and a button mapped to Start / Stop;
    - pages: Shift + Rewind / Fast-forward, per-page channels, the editor's page count, the page
      LED while Shift is held (steady, and in bursts when that fader has a value to pick up);
    - modes: Shift + Left / Right, the arrow LEDs, DAW mode's Mackie messages, per-mode mappings,

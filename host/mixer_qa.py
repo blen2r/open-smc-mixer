@@ -86,7 +86,12 @@ def control_name(c):
     return names[c - 48] if c - 48 < len(names) else f"control {c}"
 
 
+REALTIME = {0xFA: "MIDI Start", 0xFB: "MIDI Continue", 0xFC: "MIDI Stop", 0xF8: "MIDI clock"}
+
+
 def describe(m):
+    if m[0] in REALTIME:
+        return REALTIME[m[0]]
     t, ch = m[0] & 0xF0, (m[0] & 15) + 1
     d1 = m[1] if len(m) > 1 else 0
     d2 = m[2] if len(m) > 2 else 0
@@ -104,6 +109,13 @@ def cc(ch, num, lo=0, hi=127, value=None):
                 and (value is None or m[2] == value))
     p.text = f"CC ch{ch} #{num}" + (f" = {value}" if value is not None else
                                     f" ({lo}..{hi})" if (lo, hi) != (0, 127) else "")
+    return p
+
+
+def realtime(b):
+    def p(m):
+        return tuple(m) == (b,)
+    p.text = REALTIME[b]
     return p
 
 
@@ -305,8 +317,11 @@ def checks(qa):
         C("Press and release Pause (trigger: CC 51 = 100 on press only).", ctl=BTN["pause"],
           need=[cc(1, 51, value=100)], exact=1),
         C("Press Record (program change 5).", ctl=BTN["record"], need=[program(1, value=5)], exact=1),
-        C("Press and release Play (base explicitly: note 94).", ctl=BTN["play"],
-          need=[note_on(1, 94), note_off(1, 94)], exact=2),
+        C("Press Play twice (base explicitly, CC mode: MIDI Start, then Stop).", ctl=BTN["play"],
+          need=[realtime(0xFA), realtime(0xFC)], exact=2,
+          ask="Was the Play LED lit after the first press, and off after the second?"),
+        C("Press << twice (mapped to Start / Stop: MIDI Start, then Stop).", ctl=BTN["<<"],
+          need=[realtime(0xFA), realtime(0xFC)], exact=2),
         C("Press Down twice (added in the editor: toggle CC 52).", ctl=BTN["down"],
           need=[cc(1, 52, value=127), cc(1, 52, value=0)], exact=2),
         C("Press and release Up, without Shift (base: note 96).", ctl=BTN["up"], shift=False,
@@ -365,6 +380,8 @@ def checks(qa):
           need=[note_on(1, 104), pitchbend(1)], allow=any_of(pitchbend(1), note_on(1, 104), note_off(1, 104))),
         C("Turn encoder 1 to the right a little (DAW mode: V-Pot, CC 16 relative).", ctl=ENC(1),
           need=[cc(1, 16, 1, 63)]),
+        C("Press and release Play (DAW mode: the Mackie play note 94, not MIDI Start).", ctl=BTN["play"],
+          need=[note_on(1, 94), note_off(1, 94)], exact=2),
         C("Press and release Strip 1 Mute (DAW mode: note 16; the CC-mode mapping must not apply).",
           ctl=STRIP(1, "mute"), need=[note_on(1, 16), note_off(1, 16)], exact=2),
         C("Press and release Down (a DAW-mode mapping from the editor: CC 71, momentary).", ctl=BTN["down"],
