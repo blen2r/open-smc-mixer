@@ -1,6 +1,8 @@
 # QA
 
-How to check a change before you flash it on someone else's mixer or publish it. A firmware that
+How to check a change before you flash it on someone else's mixer or publish it. The runs
+recorded below were done on Linux; the tools are meant to work on macOS and Windows too (README.md,
+"Use"), but only Linux is checked. A firmware that
 was not checked on the hardware should not be shared. Three steps, in this order: offline checks,
 the guided hardware run, the manual checks. Record the run at the bottom.
 
@@ -30,6 +32,10 @@ Flash the build (`host/mixer_update.sh`), keep any Bluetooth device (the OP-XY) 
 ```sh
 python3 host/mixer_qa.py              # with mido + python-rtmidi (uv run --with mido --with python-rtmidi ...)
 ```
+
+Windows: a MIDI port can only be open in one program there, so the script and the editor cannot
+both talk to the mixer: run `py host\mixer_qa.py --no-editor` with the editor disconnected (it
+skips the editor round trip; check the editor with `?sim` and by hand).
 
 1. It backs your configuration up to `work/qa_backup_<time>.json` (restored at the end; on a rerun
    it finds your last real backup instead of backing up its own test configuration).

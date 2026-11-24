@@ -10,7 +10,8 @@ protocol are in [docs/mixer-config.md](../docs/mixer-config.md); the firmware si
 
 Web MIDI needs Chrome, Edge or Chromium and a secure origin (localhost is fine):
 
-    host/mixer_editor.sh            # serves editor/ on http://localhost:8770 and opens Chrome
+    host/mixer_editor.sh            # Linux: serves editor/ on http://localhost:8770 and opens Chrome
+    python3 host/mixer_editor.py    # the same on any OS (Windows: py host\mixer_editor.py)
 
 or `python3 -m http.server -d editor 8770` and open <http://localhost:8770>. Plug the mixer in
 over USB (our firmware, "SMC-Mixer open fw"), press **Connect (USB)** and allow MIDI / SysEx

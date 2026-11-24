@@ -31,6 +31,37 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 QA_CONFIG = os.path.join(HERE, "qa", "qa_config.json")
 WORK = os.path.join(os.path.dirname(HERE), "work")
 
+if sys.platform.startswith("win"):
+    import msvcrt
+    os.system("")                           # turns on the colour codes in a Windows console
+    _typed = []
+
+    def typed_line(timeout):
+        """A line typed on the console, or None after timeout seconds (Windows: no select on stdin)."""
+        end = time.time() + timeout
+        while True:
+            while msvcrt.kbhit():
+                ch = msvcrt.getwche()
+                if ch in "\r\n":
+                    print()
+                    line = "".join(_typed)
+                    _typed.clear()
+                    return line
+                if ch == "\b":
+                    if _typed:
+                        _typed.pop()
+                    continue
+                _typed.append(ch)
+            if time.time() >= end:
+                return None
+            time.sleep(0.01)
+else:
+    def typed_line(timeout):
+        """A line typed on the terminal, or None after timeout seconds."""
+        r, _, _ = select.select([sys.stdin], [], [], timeout)
+        return sys.stdin.readline() if r else None
+
+
 GREEN, RED, YEL, DIM, BOLD, OFF = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m", "\033[0m"
 
 # controls (editor/config.js CONTROLS)
@@ -380,9 +411,9 @@ class QA:
         start = last = time.time()
         skipped = early = False
         while True:
-            r, _, _ = select.select([sys.stdin], [], [], 0.02)
-            if r:
-                line = sys.stdin.readline().strip().lower()
+            line = typed_line(0.02)
+            if line is not None:
+                line = line.strip().lower()
                 if line == "s":
                     skipped = True
                     break

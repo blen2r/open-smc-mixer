@@ -18,7 +18,7 @@ their device in plain words, and walk them through checking it (see "QA duty").
 | `fw/boot/` | bootloader + installer (`BOARD=mixer`); rarely touched |
 | `editor/` | web editor: `config.js` (format, shared with node), `device.js` (Web MIDI + simulator), `app.js` (UI) |
 | `editor/templates/` | device templates (`.json` + `.md`), `index.json` written by `host/templates_index.py`; `local/` is git-ignored |
-| `host/` | `mixer_update.sh` (flash), `mixer_editor.sh` (serve editor), `mixer_cfg.py` (config CLI), `mixer_qa.py` + `qa/` (hardware QA), `selftest.py` (offline), `templates_index.py` |
+| `host/` | `mixer_update.sh` / `mixer_update.py` (flash: Linux / any OS), `mixer_editor.sh` / `mixer_editor.py` (serve editor), `mixer_cfg.py` (config CLI), `mixer_qa.py` + `qa/` (hardware QA), `selftest.py` (offline), `templates_index.py` |
 | `docs/mixer-config.md`, `docs/mixer-hardware.md` | the spec and the pin map |
 | `QA.md` | how changes are checked; **keep it current** |
 
@@ -41,6 +41,10 @@ python3 host/mixer_qa.py                                                    # gu
 - The editor: `host/mixer_editor.sh` (port 8770, no-cache headers). `?sim` = simulated mixer.
   Chrome holds the mixer's raw MIDI port while the editor is connected; tools go through the ALSA
   sequencer (mido), which shares it.
+
+Platforms: Linux is the tested one. `mixer_update.py`, `mixer_editor.py` and the QA script are
+meant to work on macOS and Windows (README.md, "Use"); keep them free of Linux-only tools (`amidi`,
+`aconnect`), and say "untested" for anything you could not run there.
 
 ## Safety rules (the user's hardware)
 

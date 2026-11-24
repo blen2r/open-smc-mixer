@@ -53,15 +53,32 @@ repository.
 - **Bluetooth MIDI** (the mixer is a BLE-MIDI peripheral, "SMC-Mixer") and USB-MIDI at once.
 - **Web editor** (Chrome): every setting and mapping, templates with search and favourites, a
   live monitor of what the controls send.
-- **Updates over USB** from Linux in one command; a bootloader that catches a crashing firmware.
+- **Updates over USB** in one command (Linux tested; macOS and Windows written, untested); a
+  bootloader that catches a crashing firmware.
 
 ## Use
 
-### Install (once, from the stock firmware)
+**Tested on Linux.** The macOS and Windows instructions below are written from how the tools
+work, but nobody has run them yet; if you do, a pull request saying what worked (or fixing what
+did not) is welcome. On Windows, do the one-time install from Linux or macOS (a live USB stick
+is enough); updates and the editor then work from Windows.
 
-Linux, a USB cable, and a source build (there are no release binaries). You need Docker and the
-JieLi toolchain, see [fw/README.md](fw/README.md#building); Python 3 with
-[uv](https://docs.astral.sh/uv/) (or `mido` and `python-rtmidi` installed); `dfu-util`.
+### What you need
+
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| build | Docker | Docker Desktop (amd64 emulation on Apple silicon) | WSL2 + Docker Desktop (WSL integration on) |
+| flash | `dfu-util` + a udev rule (below) | `brew install dfu-util` | [dfu-util](https://dfu-util.sourceforge.net/releases/) on the PATH, and the WinUSB driver for the bootloader (below) |
+| editor | Chrome / Chromium / Edge | Chrome / Edge | Chrome / Edge |
+
+On every OS: the JieLi toolchain ([fw/README.md](fw/README.md#building); it cannot be
+redistributed, so there are no release binaries and you build the firmware yourself), and Python 3
+with [uv](https://docs.astral.sh/uv/) (or `mido` + `python-rtmidi` installed).
+
+### Build (any OS)
+
+In a terminal (Windows: a WSL2 shell; clone from there, e.g. into `/mnt/c/Users/<you>/`, so the
+files are reachable from Windows too and keep their Linux line endings):
 
 ```sh
 git clone --recursive https://github.com/blen2r/open-smc-mixer && cd open-smc-mixer
@@ -70,7 +87,13 @@ BOARD=mixer fw/boot/build.sh                                        # bootloader
 BOARD=mixer host/package_fw.sh bootonly
 BOARD=mixer SMCPAD_TINYUSB=1 TEXT_BASE=0x1E08120 fw/build.sh        # the mixer firmware
 BOARD=mixer host/package_fw.sh mixerapp                             # -> work/flash/mixer/mixer_area.bin
+```
 
+`package_fw.sh` only packages what `fw/build.sh` compiled: after a change, run both.
+
+### Install (once, from the stock firmware): Linux, macOS
+
+```sh
 uv run --with mido --with python-rtmidi host/install_from_stock.py --board mixer \
     --app work/flash/mixer/mixer_area.bin
 ```
@@ -79,11 +102,11 @@ The script talks to the stock firmware over USB-MIDI, writes an installer and th
 into free flash (every byte read back), and asks you to switch the mixer off and on once. The
 installer replaces the stock firmware with the bootloader, which comes up as a USB DFU device;
 the script then writes the firmware. If anything does not check out, the stock firmware simply
-boots again. [docs/bootloader.md](docs/bootloader.md) has the whole story. (At the very end the
-script may say the application did not come back: its check is macOS-only. Look for
-"SMC-Mixer open fw" in `amidi -l`.)
+boots again. [docs/bootloader.md](docs/bootloader.md) has the whole story. (On Linux the script
+may say at the very end that the application did not come back: that check is macOS-only. Look
+for "SMC-Mixer open fw" in `amidi -l`.)
 
-So that `dfu-util` can reach the bootloader without sudo, add a udev rule once:
+Linux: so that `dfu-util` can reach the bootloader without sudo, add a udev rule once:
 
 ```sh
 echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0002", TAG+="uaccess"' |
@@ -92,25 +115,36 @@ echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0002", TAG+=
 
 ### Update
 
+After a build, with the mixer on USB (your settings stay):
+
 ```sh
-BOARD=mixer SMCPAD_TINYUSB=1 TEXT_BASE=0x1E08120 fw/build.sh && BOARD=mixer host/package_fw.sh mixerapp
-host/mixer_update.sh
+host/mixer_update.sh                                                       # Linux
+uv run --with mido --with python-rtmidi python host/mixer_update.py        # macOS, Windows (also Linux)
 ```
 
-`package_fw.sh` only packages what `fw/build.sh` compiled: run both. `mixer_update.sh` asks the
-running firmware into the bootloader (a SysEx message), writes the firmware and waits for it to
-come back. Your settings stay. By hand: hold **Shift + Bluetooth + Play** for 2 s, or switch the
-mixer on holding **Shift + Play**, then `dfu-util -d 1209:0002 -a 0 -D work/flash/mixer/mixer_area.bin`.
+Both ask the running firmware into the bootloader (a SysEx message), write the firmware with
+`dfu-util` and wait for it to come back. By hand: hold **Shift + Bluetooth + Play** for 2 s, or
+switch the mixer on holding **Shift + Play**, then
+`dfu-util -d 1209:0002 -a 0 -D work/flash/mixer/mixer_area.bin`.
+
+Windows, two things: a MIDI port can only be open in one program, so click **Disconnect (USB)**
+in the editor first; and once, while the mixer is in the bootloader (it shows up as an unknown
+"DFU" device), give it the WinUSB driver with [Zadig](https://zadig.akeo.ie/) (Options → List
+All Devices, pick the device with USB ID `1209 0002`, WinUSB, Install Driver). Run the update from
+a Windows terminal (PowerShell) in the repository folder, not from WSL: WSL does not see USB
+devices.
 
 ### The editor
 
 ```sh
-host/mixer_editor.sh
+host/mixer_editor.sh                 # Linux
+python3 host/mixer_editor.py         # any OS (Windows: py host\mixer_editor.py)
 ```
 
-serves the editor on `http://localhost:8770` and opens it in Chrome (Web MIDI needs Chrome,
-Edge or Chromium). **Connect (USB)** reads the mixer's configuration; change things, then **Save
-to mixer**. **Simulate** works without a mixer. [editor/README.md](editor/README.md) explains it.
+serves the editor on `http://localhost:8770` and opens it in Chrome or Edge (Web MIDI needs one of
+them; Firefox and Safari do not have it). **Connect (USB)** reads the mixer's configuration
+(the editor talks to the mixer over USB only); change things, then **Save to mixer**.
+**Simulate** works without a mixer. [editor/README.md](editor/README.md) explains it.
 
 ### Templates
 
